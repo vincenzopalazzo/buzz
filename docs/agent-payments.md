@@ -1,28 +1,38 @@
-# Agent payments: an MCP pays, Buzz shows the bubble
+# Agent payments: bring your own wallet MCP, Buzz shows the bubble
 
 `draft`
 
-Buzz shows Lightning payments in a conversation and holds no wallet. The
-agent pays: goose, Buzz's own agent, or any MCP client. It uses an MCP server
-that talks to the user's own wallet. The tool result includes a receipt in
+Buzz shows Lightning payments in a conversation and holds no wallet. People
+already run a wallet MCP server for their agent, for example
+[lexe-mcp](https://github.com/vincenzopalazzo/lexe-mcp) for a Lexe node, or an
+NWC or Core Lightning server. The agent pays with that tool. Buzz then tells
+the agent to end its reply with two receipt lines in
 [Sonar](https://github.com/hedwig-corp/bitchat-to-sonar)'s chat receipt wire
-format. The agent copies it into its reply, and the Buzz UI renders it as a
-payment bubble.
+format, and the Buzz UI renders those lines as a payment bubble.
 
-Buzz adds no event kind, relay logic, CLI command or agent prompt for this.
-It only parses lines in ordinary messages.
+Buzz adds no event kind, relay logic, CLI command or wallet code for this. It
+adds one prompt section for its agents, and parsing in the desktop and mobile
+timelines.
 
 ## The pieces
 
 | Piece | Where | Role |
 | --- | --- | --- |
-| Wallet | the user's own: Alby Hub, LNbits, Phoenixd, CLN with NWC, … | Holds funds and pays. Reached over Nostr Wallet Connect. |
-| MCP server | `crates/buzz-lightning-mcp`, added as a goose extension | Pays, enforces limits, returns the receipt lines. |
-| Agent | goose under `buzz-acp` | Asks the MCP to pay, then posts its reply with `buzz messages send`. |
-| UI | Buzz Desktop and mobile | Turns receipt lines into a gold bubble. |
-| Test wallet | `crates/buzz-mock-wallet` | Local NWC wallet for demos and tests. No real money. |
+| Wallet MCP | the user's own, e.g. lexe-mcp as a goose extension | Pays, enforces its own limits, reports settlement. |
+| Agent | goose (or any agent) under `buzz-acp` | Pays with the wallet tool, then posts its reply with `buzz messages send`. |
+| Receipt contract | `crates/buzz-acp/src/base_prompt.md`, section *Payment Receipts* | Tells the agent how to turn a settled payment into the two lines. |
+| UI | Buzz Desktop and mobile | Turns the lines into a gold bubble. |
 
-Setup and tool reference: `crates/buzz-lightning-mcp/README.md`.
+With lexe-mcp, a settled `lexe.pay` returns the following, and the agent turns
+it into `⚡PAY|1|<index>|<amount>` and `⚡PAYDONE|2|<index>`:
+
+- `settled: true`
+- `amount` in sats
+- `index`, in the form `<created_at>-<payment id>`
+- for BOLT12 offers, a payer proof with a `proof_url` on lnproof.space
+
+The proof link goes in the reply's prose. A pending or unknown result gets no
+lines; the agent checks it later with `lexe.check_payment`.
 
 ## Wire format
 
@@ -67,8 +77,9 @@ mid-sentence, or on an indented line, stays text.
   Nobody can mark someone else's receipt paid.
 - **Proof.** A preimage shows as a "proof" control that copies it. Buzz cannot
   verify it, because the payment hash lives in the payee's wallet. The payee
-  checks it there, or with the MCP's `check_payment` on an invoice they
-  created.
+  checks it there. For BOLT12, the payer proof link the wallet returns, such
+  as lexe-mcp's lnproof.space URL, is the stronger proof; the agent puts it in
+  the prose.
 - **Edits and deletions.** An edit that adds or removes lines changes the
   bubble. A deleted `⚡PAYDONE` stops settling.
 
@@ -94,11 +105,9 @@ It touched 179 files with 27.6k lines. Its author closed it the day it opened,
 and the fork has been idle since July 2026.
 
 Sonar shows the smaller split: payments settle in a wallet, and the chat
-carries only a receipt. Here the wallet sits behind an MCP server the agent
-already knows how to call. Buzz's part shrinks to rendering.
-
-`buzz-mock-wallet` comes from that PR, by Marco Pesani, with its dependency on
-the removed wallet crate stripped.
+carries only a receipt. Here the wallet sits behind whatever MCP server the
+user already runs. Buzz's part shrinks to a receipt contract and rendering, so
+any wallet works without Buzz shipping or reviewing wallet code.
 
 ## Known gaps
 
@@ -107,3 +116,7 @@ the removed wallet crate stripped.
 - Sidebar, search and notification previews show the raw receipt lines.
 - A bubble is the payer's claim. The payee should confirm in their own wallet
   before acting on it.
+- The agent model writes the lines from the wallet result, so a model can
+  get them wrong. A malformed line then shows as plain text, never as a
+  bubble. A wallet MCP that returns the two lines ready to paste would remove
+  that step.
