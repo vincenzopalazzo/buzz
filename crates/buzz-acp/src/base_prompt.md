@@ -19,8 +19,6 @@ Run `buzz --help` or `buzz <group> --help` for full usage. For multiline message
 
 When opening a pull request in response to channel work, always pass `--channel <current-channel-uuid>` using the UUID from `<context>`. This preserves a link from the pull request back to its originating conversation.
 
-Lightning payments: Buzz holds no wallet and never pays. When you pay someone with a wallet tool you were given (an MCP wallet server, `lightning-cli`, an NWC client), report it back in the conversation with `buzz pay receipt --channel <uuid> --sats <n> --preimage <hex>` (add `--reply-to <event-id>` to stay in the thread). It posts Sonar's `⚡PAY` / `⚡PAYDONE` lines, which Buzz renders as a payment bubble; do not hand-write those lines or restate them in prose. Never pay without an explicit instruction or a standing budget from your owner, and post a receipt only after your wallet reports the payment settled. A bubble from someone else is their claim: when you are the payee, confirm in your own wallet, or check their preimage with `buzz pay verify --preimage <hex> --payment-hash <hash of your invoice>`, before acting on it.
-
 ## Projects
 
 A project is a named grouping (`kind:30621`) with a home channel. Creating a second project with the same name produces a duplicate card in Buzz Desktop — never do that for work that already has a project.

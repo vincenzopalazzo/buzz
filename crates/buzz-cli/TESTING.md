@@ -269,33 +269,6 @@ echo "diff content" | buzz messages send-diff \
   --pr 42 | jq .
 ```
 
-### 6.4b Payment receipts (Sonar `⚡PAY`)
-
-Buzz never pays; these commands post Sonar's chat receipt lines as ordinary
-messages. Use any 64-hex preimage for a shape test.
-
-```bash
-PREIMAGE=0000000000000000000000000000000000000000000000000000000000000000
-HASH=66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925   # sha256(32 zero bytes)
-
-# receipt: posts ⚡PAY|1|<id>|21 then ⚡PAYDONE|2|<id>|<preimage>
-buzz pay receipt --channel "$CHANNEL_ID" --sats 21 --preimage "$PREIMAGE" | jq .
-# Expected: {"pay_id":"<16 hex>","receipt":{"accepted":true,...},"done":{"accepted":true,...}}
-
-# pending receipt, settled later
-PAY_ID=$(buzz pay receipt --channel "$CHANNEL_ID" --sats 500 --pending | jq -r .pay_id)
-buzz pay done --channel "$CHANNEL_ID" --id "$PAY_ID" | jq .
-
-# the raw lines are plain kind:9 content
-buzz --format compact messages get --channel "$CHANNEL_ID" --limit 4 | jq -r '.[].content'
-
-# verify: offline, exit 0 iff sha256(preimage) == payment_hash
-buzz pay verify --preimage "$PREIMAGE" --payment-hash "$HASH" | jq .
-```
-
-In Buzz Desktop the `⚡PAY` row renders as a gold bubble ("Paid · proof"), and
-the `⚡PAYDONE` row is hidden.
-
 ### 6.5 Reactions
 
 ```bash

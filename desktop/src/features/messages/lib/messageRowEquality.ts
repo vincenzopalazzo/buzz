@@ -69,6 +69,28 @@ export function reactionsEqual(
   return true;
 }
 
+/**
+ * Sonar receipts on a row (rebuilt per `formatTimelineMessages` run). A
+ * `⚡PAYDONE` arriving after its `⚡PAY` changes only `settled`/`preimage`.
+ */
+export function sonarPayEqual(
+  a: TimelineMessage["sonarPay"],
+  b: TimelineMessage["sonarPay"],
+): boolean {
+  if (a === b) return true;
+  if (!a || !b || a.text !== b.text) return false;
+  if (a.receipts.length !== b.receipts.length) return false;
+  return a.receipts.every((left, i) => {
+    const right = b.receipts[i];
+    return (
+      left.id === right.id &&
+      left.sats === right.sats &&
+      left.settled === right.settled &&
+      left.preimage === right.preimage
+    );
+  });
+}
+
 export function numberArrayEqual(
   a: readonly number[] | undefined,
   b: readonly number[] | undefined,

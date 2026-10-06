@@ -30,6 +30,8 @@ members = [
     "crates/buzz-relay-mesh",
     "crates/buzz-mesh-smoke",
     "crates/buzz-dev-mcp",
+    "crates/buzz-lightning-mcp",
+    "crates/buzz-mock-wallet",
     "crates/buzz-voice",
     "crates/buzz-backend-kubernetes",
     "crates/buzz-datastore-tracing",

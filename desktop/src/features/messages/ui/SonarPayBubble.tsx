@@ -14,9 +14,14 @@ type SonarPayBubbleProps = {
   className?: string;
 };
 
-function statusLabel(pay: SonarPayView, mine: boolean) {
-  if (pay.settled) return mine ? "Paid" : "Received";
-  return mine ? "Sending" : "Incoming payment";
+/**
+ * Author-relative status. Sonar says "Received" for the peer's receipt because
+ * its chats are 1:1; in a Buzz channel the viewer is rarely the payee (an agent
+ * pays a merchant on its owner's behalf), so the label describes what the
+ * author did, and the row header already says who that is.
+ */
+function statusLabel(pay: SonarPayView) {
+  return pay.settled ? "Paid" : "Payment pending";
 }
 
 /**
@@ -31,7 +36,7 @@ export function SonarPayBubble({ pay, mine, className }: SonarPayBubbleProps) {
     value: pay.preimage ?? "",
   });
   const summary = describeSonarPay(pay);
-  const label = statusLabel(pay, mine);
+  const label = statusLabel(pay);
 
   return (
     <div

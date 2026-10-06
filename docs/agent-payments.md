@@ -1,124 +1,109 @@
-# Agent payments: Sonar receipts in Buzz
+# Agent payments: an MCP pays, Buzz shows the bubble
 
 `draft`
 
-Buzz shows Lightning payments in a conversation without holding a wallet. Whoever
-paid (a human, or an agent with its own wallet tool) posts a receipt in
+Buzz shows Lightning payments in a conversation and holds no wallet. The
+agent pays: goose, Buzz's own agent, or any MCP client. It uses an MCP server
+that talks to the user's own wallet. The tool result includes a receipt in
 [Sonar](https://github.com/hedwig-corp/bitchat-to-sonar)'s chat receipt wire
-format. Buzz renders it as a payment bubble. Buzz never pays, never stores keys
-or balances, and adds no event kind, relay logic or schema.
+format. The agent copies it into its reply, and the Buzz UI renders it as a
+payment bubble.
+
+Buzz adds no event kind, relay logic, CLI command or agent prompt for this.
+It only parses lines in ordinary messages.
+
+## The pieces
+
+| Piece | Where | Role |
+| --- | --- | --- |
+| Wallet | the user's own: Alby Hub, LNbits, Phoenixd, CLN with NWC, … | Holds funds and pays. Reached over Nostr Wallet Connect. |
+| MCP server | `crates/buzz-lightning-mcp`, added as a goose extension | Pays, enforces limits, returns the receipt lines. |
+| Agent | goose under `buzz-acp` | Asks the MCP to pay, then posts its reply with `buzz messages send`. |
+| UI | Buzz Desktop and mobile | Turns receipt lines into a gold bubble. |
+| Test wallet | `crates/buzz-mock-wallet` | Local NWC wallet for demos and tests. No real money. |
+
+Setup and tool reference: `crates/buzz-lightning-mcp/README.md`.
 
 ## Wire format
 
-Each line is the **entire** content of an ordinary message (`kind:9` or
-`kind:40002`). It is byte-for-byte Sonar's format (`docs/SONAR-PAYMENTS.md`,
-decoder `SonarPay.kt`), so Sonar and Buzz clients read the same messages.
+Byte-for-byte Sonar (`docs/SONAR-PAYMENTS.md`, decoder `SonarPay.kt`):
 
 ```text
-⚡PAY|1|<id>|<sats>                payment receipt: rendered as a gold bubble
+⚡PAY|1|<id>|<sats>                payment receipt: a gold bubble
 ⚡PAYDONE|2|<id>                   settled, no preimage available
 ⚡PAYDONE|2|<id>|<preimage_hex>    settled, with the 32-byte Lightning preimage
 ```
 
-Decoding rules, mirrored from Sonar:
+Decoding follows Sonar's rules:
 
-- `|` splits the fields. The line must start at the first character: a leading
-  space makes it plain text.
-- `⚡PAY` needs version `1` and a positive integer amount in sats.
-- `⚡PAYDONE` accepts version `2` with an optional 64-hex preimage, and version
-  `1` with no preimage (old peers).
-- Anything else, including unknown versions and `⚡PAYCLAIM`, renders as plain
-  text.
+- Fields are split on `|`.
+- `⚡PAY` needs version `1` and a positive whole number of sats.
+- `⚡PAYDONE` takes version `2` with an optional 64-hex preimage, or version
+  `1` with no preimage.
+- Anything else stays plain text, including unknown versions and `⚡PAYCLAIM`.
+
+**Lines inside a longer message.** Sonar sends each line as a whole message.
+An agent's reply wraps them in prose, so Buzz also finds them inside a
+message. Each must sit on its own line, with no leading space; trailing
+whitespace is ignored. The receipt lines are removed from the displayed text,
+and one bubble is drawn per `⚡PAY` line. Text mentioning `⚡PAY|1|…`
+mid-sentence, or on an indented line, stays text.
 
 ## How Buzz renders it
 
-- A `⚡PAY` message renders as a gold bubble with the amount in sats. The
-  status line reads "Sending" until settled, then "Paid" for your own receipts
-  or "Received" for someone else's.
-- A `⚡PAYDONE` message is a hidden control row. It never shows in the timeline
-  and never raises unread or a notification. It only flips the matching bubble
-  to settled.
-- A `⚡PAYDONE` can arrive before its `⚡PAY`. The timeline folds the whole
-  conversation, so arrival order does not matter.
-- **Signer binding.** Sonar conversations are 1:1. A Buzz channel has many
-  writers, so a `⚡PAYDONE` only settles a `⚡PAY` signed by the same key. Nobody
-  can mark someone else's receipt paid.
-- When a preimage is present, the bubble shows a "proof" control that copies
-  it. Buzz cannot check it: the payment hash lives in the payee's wallet. The
-  payee checks it with their wallet or `buzz pay verify`.
-- A deleted `⚡PAYDONE` stops settling its bubble.
+- **Status.** A `⚡PAY` line shows the amount in sats. The status reads
+  "Payment pending" until settled, then "Paid". It describes what the message
+  author did, and the row header names the author. Sonar says "Received" for
+  the other person's receipt because its chats are one-to-one; in a Buzz
+  channel the viewer is rarely the payee.
+- **Hidden rows.** A message containing only `⚡PAYDONE` lines is a hidden
+  control row. It never appears in the timeline, and on desktop it raises no
+  unread count or notification when it arrives live.
+- **Settlement.** A `⚡PAYDONE` settles the `⚡PAY` with the same id. It can
+  arrive in the same message, a later one, or an earlier one; the timeline
+  folds the whole conversation.
+- **Signer binding.** Sonar chats are one-to-one. A Buzz channel has many
+  writers, so a `⚡PAYDONE` only settles a `⚡PAY` signed by the same key.
+  Nobody can mark someone else's receipt paid.
+- **Proof.** A preimage shows as a "proof" control that copies it. Buzz cannot
+  verify it, because the payment hash lives in the payee's wallet. The payee
+  checks it there, or with the MCP's `check_payment` on an invoice they
+  created.
+- **Edits and deletions.** An edit that adds or removes lines changes the
+  bubble. A deleted `⚡PAYDONE` stops settling.
 
-Implementation: `desktop/src/features/messages/lib/sonarPay.ts` (decoder and
-fold), `formatTimelineMessages.ts` (hide and attach), `SonarPayBubble.tsx`
-(bubble), `useLiveChannelUpdates.ts` (no unread or notification for
-`⚡PAYDONE`).
+Implementation:
 
-## How an agent reports a payment
-
-The agent pays with whatever wallet it was given: an MCP wallet server,
-`lightning-cli`, an NWC client, a Cashu wallet. Then it sends the result back
-with the `buzz` CLI, which every managed agent already has on `PATH`:
-
-```bash
-# after the wallet returned {preimage}
-buzz pay receipt --channel $CH --sats 21 --preimage $PREIMAGE [--reply-to $EVENT]
-# → posts ⚡PAY|1|<id>|21, then ⚡PAYDONE|2|<id>|<preimage>
-#   {"pay_id":"<id>","receipt":{...},"done":{...}}
-
-# a payment still in flight: post the receipt now, settle later
-buzz pay receipt --channel $CH --sats 500 --pending
-buzz pay done --channel $CH --id <pay_id> [--preimage $PREIMAGE]
-
-# as the payee, check a preimage against the hash of your own invoice
-buzz pay verify --preimage $PREIMAGE --payment-hash $HASH
-```
-
-The agent base prompt (`crates/buzz-acp/src/base_prompt.md`) sets two rules:
-
-- Never pay without an explicit instruction or a standing owner budget.
-- Post a receipt only after the wallet reports the payment settled.
-
-A bubble is the payer's claim. A payee acts on it only after confirming in its
-own wallet.
-
-### Recommended wallet tool contract (outside Buzz)
-
-Any wallet an agent can call works. A minimal MCP surface that fits:
-
-| Tool | Input | Output |
-| --- | --- | --- |
-| `wallet_pay` | `{ target, amount_sat?, max_fee_sat? }`: a BOLT11 invoice, BOLT12 offer, LUD-16 or BIP-353 address | `{ status: "paid" \| "failed", payment_hash?, preimage?, amount_sat, fee_sat?, reason? }` |
-| `wallet_invoice` | `{ amount_sat, description?, expiry_secs? }` | `{ bolt11, payment_hash, expiry }` |
-| `wallet_lookup` | `{ payment_hash }` | `{ status: "settled" \| "pending" \| "failed" \| "not_found", preimage? }` |
-
-`wallet_pay` should fire at most once per payment. A timeout is an unknown
-outcome to resolve with `wallet_lookup`, never by paying again.
+- desktop: `desktop/src/features/messages/lib/sonarPay.ts`,
+  `formatTimelineMessages.ts`, `ui/SonarPayBubble.tsx`, and
+  `features/channels/useLiveChannelUpdates.ts`
+- mobile: `mobile/lib/shared/sonar_pay/`, `features/channels/timeline_message.dart`,
+  and `channel_detail_page/message_bubble.dart`
 
 ## Why this shape
 
 The earlier attempt, [block/buzz#2635](https://github.com/block/buzz/pull/2635),
-"Lightning Wallet (NWC)", put a whole wallet product into Buzz. Its author
-closed it the day it opened, and its fork has been idle since July 2026. It
-covered:
+put a whole NWC wallet inside Buzz:
 
-- custody and NWC/LNURL adapters
-- a mock wallet daemon and keyring storage
+- custody and keyring storage
+- NWC and LNURL adapters
 - a desktop wallet UI
 - new event kinds and relay ingest
 
-| | |
-| --- | --- |
-| Files / lines | 179 / 27.6k |
+It touched 179 files with 27.6k lines. Its author closed it the day it opened,
+and the fork has been idle since July 2026.
 
-Most of it was custody, which a chat relay does not need to own.
+Sonar shows the smaller split: payments settle in a wallet, and the chat
+carries only a receipt. Here the wallet sits behind an MCP server the agent
+already knows how to call. Buzz's part shrinks to rendering.
 
-Sonar already showed the smaller shape: payments settle in a wallet and the
-chat only carries a receipt. Buzz adopts that receipt format as is. The change
-is client rendering plus a CLI helper.
+`buzz-mock-wallet` comes from that PR, by Marco Pesani, with its dependency on
+the removed wallet crate stripped.
 
 ## Known gaps
 
-- Mobile shows the raw lines as text until it gets a bubble.
-- The desktop's cold-start unread catch-up runs natively and still counts a
-  `⚡PAYDONE` as a message. Live delivery is filtered.
-- Sidebar, search and notification previews show the raw `⚡PAY` line.
+- On desktop, the unread count rebuilt natively when the app opens still
+  counts a `⚡PAYDONE`-only message. Messages arriving live are filtered.
+- Sidebar, search and notification previews show the raw receipt lines.
+- A bubble is the payer's claim. The payee should confirm in their own wallet
+  before acting on it.

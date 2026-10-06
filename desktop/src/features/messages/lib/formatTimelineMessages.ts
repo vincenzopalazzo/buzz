@@ -49,7 +49,7 @@ import { truncateNpub } from "@/shared/lib/pubkey";
 import {
   collectSonarPaySettlements,
   isSonarPayControlLine,
-  resolveSonarPayView,
+  resolveSonarPayMessage,
 } from "@/features/messages/lib/sonarPay";
 
 const HEX_RE = /^[0-9a-f]+$/i;
@@ -592,7 +592,7 @@ export function formatTimelineMessages(
       // Bound to the raw signer, not a relay-delegated display author: only
       // the key that signed the `⚡PAY` can settle it with a `⚡PAYDONE`.
       sonarPay: isSonarPayCarrierKind(event.kind)
-        ? resolveSonarPayView(
+        ? resolveSonarPayMessage(
             edit ? edit.content : event.content,
             event.pubkey,
             sonarPaySettlements,

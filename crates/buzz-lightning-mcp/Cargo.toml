@@ -1,0 +1,41 @@
+[package]
+name = "buzz-lightning-mcp"
+description = "MCP server that pays Lightning invoices over Nostr Wallet Connect and returns Sonar chat receipts Buzz renders as payment bubbles"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+name = "buzz_lightning_mcp"
+path = "src/lib.rs"
+
+[[bin]]
+name = "buzz-lightning-mcp"
+path = "src/main.rs"
+
+[dependencies]
+rmcp = { version = "3.4.1", features = ["server", "transport-io", "macros"] }
+schemars = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+thiserror = { workspace = true }
+sha2 = { workspace = true }
+hex = { workspace = true }
+uuid = { workspace = true }
+reqwest = { workspace = true }
+# NIP-47 Nostr Wallet Connect client (rust-nostr), same 0.44 line as the workspace `nostr`.
+nostr = { workspace = true, features = ["nip47"] }
+nwc = "0.44"
+# BOLT11 decode only (amount, payment hash, expiry). No signing, no node.
+lightning-invoice = { version = "0.34", features = ["std"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "test-util"] }
+# Mint signed test invoices (same bitcoin/secp256k1 line lightning-invoice uses).
+bitcoin = { version = "0.32", default-features = false, features = ["std", "secp-recovery"] }
+buzz-mock-wallet = { path = "../buzz-mock-wallet" }

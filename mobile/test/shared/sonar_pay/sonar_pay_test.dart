@@ -61,11 +61,16 @@ void main() {
       expect(messages.map((m) => m.id), ['m1']);
       expect(
         messages.single.sonarPay,
-        const SonarPayView(
-          id: 'p1',
-          sats: 21,
-          settled: true,
-          preimage: _preimage,
+        const SonarPayMessage(
+          text: '',
+          receipts: [
+            SonarPayView(
+              id: 'p1',
+              sats: 21,
+              settled: true,
+              preimage: _preimage,
+            ),
+          ],
         ),
       );
     });
@@ -75,7 +80,23 @@ void main() {
         _msg('m1', '⚡PAY|1|p1|21'),
         _msg('d1', '⚡PAYDONE|2|p1', pubkey: 'mallory'),
       ]);
-      expect(messages.single.sonarPay?.settled, isFalse);
+      expect(messages.single.sonarPay?.receipts.single.settled, isFalse);
+    });
+
+    test('an agent reply with embedded lines keeps its text and settles', () {
+      final messages = formatTimeline([
+        _msg('m1', 'Paid it.\n⚡PAY|1|g1|21\n⚡PAYDONE|2|g1|$_preimage'),
+      ]);
+      final pay = messages.single.sonarPay!;
+      expect(pay.text, 'Paid it.');
+      expect(pay.receipts.single.settled, isTrue);
+      expect(messages.single.content, contains('⚡PAY|1|g1|21'));
+    });
+
+    test('indented receipt text is not a receipt', () {
+      expect(parseSonarPayContent('  ⚡PAY|1|p1|21'), isNull);
+      expect(isSonarPayControlLine('⚡PAYDONE|2|a\n⚡PAYDONE|2|b'), isTrue);
+      expect(isSonarPayControlLine('ok\n⚡PAYDONE|2|a'), isFalse);
     });
 
     test('plain messages carry no payment state', () {
@@ -106,7 +127,7 @@ void main() {
       ),
     );
     expect(find.text('2,100'), findsOneWidget);
-    expect(find.text('Received'), findsOneWidget);
+    expect(find.text('Paid'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('sonar-pay-copy-preimage')),
       findsOneWidget,
