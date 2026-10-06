@@ -225,9 +225,6 @@ enum Cmd {
     /// Add, remove, and list emoji reactions
     #[command(subcommand)]
     Reactions(ReactionsCmd),
-    /// Sonar chat payment receipts (⚡PAY bubbles); Buzz never holds funds
-    #[command(subcommand)]
-    Pay(PayCmd),
     /// Manage your custom emoji set (workspace palette is the union of all members' sets)
     #[command(subcommand)]
     Emoji(EmojiCmd),
@@ -825,58 +822,6 @@ pub enum ReactionsCmd {
         /// Event ID (64-char hex)
         #[arg(long)]
         event: String,
-    },
-}
-
-#[derive(Subcommand)]
-pub enum PayCmd {
-    /// Post a Sonar payment receipt after you paid (renders as a payment bubble)
-    #[command(
-        after_help = "Buzz never pays: pay with your own wallet first, then report it here.\n\nPosts `⚡PAY|1|<id>|<sats>` and then `⚡PAYDONE|2|<id>[|<preimage>]` as ordinary messages\n(Sonar's chat receipt wire format). Buzz shows the first as a gold payment bubble\nand uses the second, hidden, to mark it settled.\n\nExamples:\n  buzz pay receipt --channel $CH --sats 21 --preimage <64-hex from your wallet>\n  buzz pay receipt --channel $CH --sats 500 --reply-to <event-id>\n  buzz pay receipt --channel $CH --sats 500 --pending   # settle later with `buzz pay done`"
-    )]
-    Receipt {
-        /// Channel or DM UUID
-        #[arg(long)]
-        channel: String,
-        /// Amount paid, in whole satoshis
-        #[arg(long)]
-        sats: u64,
-        /// Lightning preimage returned by your wallet (64 hex chars); shown as proof
-        #[arg(long)]
-        preimage: Option<String>,
-        /// Receipt id (default: 16 random hex chars)
-        #[arg(long)]
-        id: Option<String>,
-        /// Post in the thread of this event (64-char hex)
-        #[arg(long = "reply-to")]
-        reply_to: Option<String>,
-        /// Post only the `⚡PAY` line; the payment has not settled yet
-        #[arg(long)]
-        pending: bool,
-    },
-    /// Mark an earlier `⚡PAY` receipt of yours as settled (`⚡PAYDONE`)
-    Done {
-        /// Channel or DM UUID (same as the receipt)
-        #[arg(long)]
-        channel: String,
-        /// Receipt id printed by `buzz pay receipt` (`pay_id`)
-        #[arg(long)]
-        id: String,
-        /// Lightning preimage returned by your wallet (64 hex chars)
-        #[arg(long)]
-        preimage: Option<String>,
-        /// Post in the thread of this event (64-char hex)
-        #[arg(long = "reply-to")]
-        reply_to: Option<String>,
-    },
-    /// Check offline that SHA256(preimage) == payment_hash (exit 0 iff it matches)
-    Verify {
-        /// Hex preimage (64 chars)
-        #[arg(long)]
-        preimage: String,
-        /// Hex payment hash from your own invoice (64 chars)
-        #[arg(long = "payment-hash")]
-        payment_hash: String,
     },
 }
 
@@ -2252,7 +2197,6 @@ async fn run(cli: Cli) -> Result<(), CliError> {
         Cmd::Channels(sub) => commands::channels::dispatch(sub, &client, &cli.format).await,
         Cmd::Canvas(sub) => commands::channels::dispatch_canvas(sub, &client).await,
         Cmd::Reactions(sub) => commands::reactions::dispatch(sub, &client).await,
-        Cmd::Pay(sub) => commands::pay::dispatch(sub, &client).await,
         Cmd::Emoji(sub) => commands::emoji::dispatch(sub, &client).await,
         Cmd::Gifs(sub) => commands::gifs::dispatch(sub, &client).await,
         Cmd::Dms(sub) => commands::dms::dispatch(sub, &client).await,
@@ -2436,7 +2380,6 @@ mod tests {
             "notes",
             "pack",
             "patches",
-            "pay",
             "pr",
             "projects",
             "reactions",
@@ -2535,7 +2478,6 @@ mod tests {
             vec!["get", "history", "restore", "set"]
         );
         assert_eq!(names(&cmd, "reactions"), vec!["add", "get", "remove"]);
-        assert_eq!(names(&cmd, "pay"), vec!["done", "receipt", "verify"]);
         assert_eq!(
             names(&cmd, "emoji"),
             vec!["export", "import", "list", "rm", "set"]
@@ -2648,7 +2590,6 @@ mod tests {
             ("messages", 8),
             ("pack", 2),
             ("patches", 4),
-            ("pay", 3),
             ("pr", 5),
             ("projects", 8),
             ("reactions", 3),

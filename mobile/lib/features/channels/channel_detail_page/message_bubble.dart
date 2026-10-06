@@ -245,21 +245,12 @@ class _MessageBubble extends HookConsumerWidget {
                                     ],
                                   ),
                                 ),
-                              if (message.sonarPay case final pay?)
-                                Padding(
-                                  padding: const EdgeInsets.only(
-                                    top: Grid.half,
-                                  ),
-                                  child: SonarPayBubble(
-                                    pay: pay,
-                                    mine:
-                                        message.pubkey.toLowerCase() ==
-                                        currentPubkey?.toLowerCase(),
-                                  ),
-                                )
-                              else
+                              // Sonar receipts: the text without its payment
+                              // lines, then one bubble per `⚡PAY` line.
+                              if (message.sonarPay?.text.isNotEmpty ?? true)
                                 MessageContent(
-                                  content: message.content,
+                                  content:
+                                      message.sonarPay?.text ?? message.content,
                                   mentionNames: resolvedMentionNames,
                                   mentionLabels: mentionLabels,
                                   agentMentionPubkeys: agentMentionPubkeys,
@@ -319,6 +310,21 @@ class _MessageBubble extends HookConsumerWidget {
                                           currentChannelId,
                                         ),
                                       ),
+                                ),
+                              for (final pay
+                                  in message.sonarPay?.receipts ??
+                                      const <SonarPayView>[])
+                                Padding(
+                                  padding: const EdgeInsets.only(
+                                    top: Grid.half,
+                                  ),
+                                  child: SonarPayBubble(
+                                    key: ValueKey('sonar-pay-${pay.id}'),
+                                    pay: pay,
+                                    mine:
+                                        message.pubkey.toLowerCase() ==
+                                        currentPubkey?.toLowerCase(),
+                                  ),
                                 ),
                             ],
                           ),

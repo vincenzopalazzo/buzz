@@ -65,11 +65,50 @@ export function decodeSonarPayLine(content: string): SonarPayLine | null {
 }
 
 /**
- * `⚡PAYDONE` lines are control rows: Sonar hides them from the transcript and
- * from unread counts. They only change the state of the matching `⚡PAY`.
+ * A message's Sonar payment lines, split from the rest of its text.
+ *
+ * Sonar sends each line as an entire message. An agent (goose with the
+ * `buzz-lightning-mcp` server, for example) usually wraps them in a sentence,
+ * so Buzz also accepts them as lines inside a longer message: each receipt
+ * line must sit on its own line, with no leading space. Trailing whitespace
+ * and `\r` are ignored.
+ */
+export type SonarPayContent = {
+  /** The message with every payment line removed, trimmed. */
+  text: string;
+  /** `⚡PAY` lines, in order. */
+  pays: Array<{ id: string; sats: number }>;
+  /** `⚡PAYDONE` lines, in order. */
+  dones: Array<{ id: string; preimage?: string }>;
+};
+
+export function parseSonarPayContent(content: string): SonarPayContent | null {
+  const pays: SonarPayContent["pays"] = [];
+  const dones: SonarPayContent["dones"] = [];
+  const kept: string[] = [];
+  for (const rawLine of content.split("\n")) {
+    const line = decodeSonarPayLine(rawLine.replace(/\s+$/, ""));
+    if (line?.type === "pay") pays.push({ id: line.id, sats: line.sats });
+    else if (line?.type === "done")
+      dones.push({ id: line.id, preimage: line.preimage });
+    else kept.push(rawLine);
+  }
+  if (pays.length === 0 && dones.length === 0) return null;
+  return { text: kept.join("\n").trim(), pays, dones };
+}
+
+/**
+ * A message made only of `⚡PAYDONE` lines is a control row: Sonar hides it
+ * from the transcript and from unread counts. It only settles a `⚡PAY`.
  */
 export function isSonarPayControlLine(content: string): boolean {
-  return decodeSonarPayLine(content)?.type === "done";
+  const parsed = parseSonarPayContent(content);
+  return (
+    parsed !== null &&
+    parsed.pays.length === 0 &&
+    parsed.dones.length > 0 &&
+    parsed.text === ""
+  );
 }
 
 function settlementKey(authorPubkey: string, id: string) {
@@ -77,7 +116,7 @@ function settlementKey(authorPubkey: string, id: string) {
 }
 
 /**
- * Collect settlements from `⚡PAYDONE` messages, keyed by signer and id.
+ * Collect settlements from every `⚡PAYDONE` line, keyed by signer and id.
  *
  * Sonar is 1:1, so any DONE settles the matching PAY. A Buzz channel has many
  * writers, so a DONE only settles a PAY signed by the same key: nobody can
@@ -89,31 +128,51 @@ export function collectSonarPaySettlements(
 ): Map<string, SonarPaySettlement> {
   const settlements = new Map<string, SonarPaySettlement>();
   for (const event of events) {
-    const line = decodeSonarPayLine(event.content);
-    if (line?.type !== "done") continue;
-    const key = settlementKey(event.pubkey, line.id);
-    const existing = settlements.get(key);
-    if (!existing || (!existing.preimage && line.preimage)) {
-      settlements.set(key, { preimage: line.preimage });
+    const parsed = parseSonarPayContent(event.content);
+    if (!parsed) continue;
+    for (const done of parsed.dones) {
+      const key = settlementKey(event.pubkey, done.id);
+      const existing = settlements.get(key);
+      if (!existing || (!existing.preimage && done.preimage)) {
+        settlements.set(key, { preimage: done.preimage });
+      }
     }
   }
   return settlements;
 }
 
-/** The bubble state for a message whose content is a `⚡PAY` line. */
-export function resolveSonarPayView(
+/** Text plus payment bubbles for a message that carries `⚡PAY` lines. */
+export type SonarPayMessageView = {
+  /** Remaining message text, rendered above the bubbles (may be empty). */
+  text: string;
+  receipts: SonarPayView[];
+};
+
+/**
+ * Bubble state for a message with at least one `⚡PAY` line, or `undefined`
+ * for any other message (including DONE-only control rows, which are hidden,
+ * and text with only DONE lines, which renders as text without them).
+ */
+export function resolveSonarPayMessage(
   content: string,
   signerPubkey: string,
   settlements: ReadonlyMap<string, SonarPaySettlement>,
-): SonarPayView | undefined {
-  const line = decodeSonarPayLine(content);
-  if (line?.type !== "pay") return undefined;
-  const settlement = settlements.get(settlementKey(signerPubkey, line.id));
+): SonarPayMessageView | undefined {
+  const parsed = parseSonarPayContent(content);
+  if (!parsed || (parsed.pays.length === 0 && parsed.text === "")) {
+    return undefined;
+  }
   return {
-    id: line.id,
-    sats: line.sats,
-    settled: settlement !== undefined,
-    preimage: settlement?.preimage,
+    text: parsed.text,
+    receipts: parsed.pays.map((pay) => {
+      const settlement = settlements.get(settlementKey(signerPubkey, pay.id));
+      return {
+        id: pay.id,
+        sats: pay.sats,
+        settled: settlement !== undefined,
+        preimage: settlement?.preimage,
+      };
+    }),
   };
 }
 

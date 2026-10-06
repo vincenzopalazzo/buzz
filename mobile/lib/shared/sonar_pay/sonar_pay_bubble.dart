@@ -23,10 +23,9 @@ class SonarPayBubble extends ConsumerWidget {
   static const _goldSoft = Color(0xFFFDE7B0);
   static const _onGold = Color(0xFF3D2A00);
 
-  String get _status {
-    if (pay.settled) return mine ? 'Paid' : 'Received';
-    return mine ? 'Sending' : 'Incoming payment';
-  }
+  /// Author-relative status: in a Buzz channel the viewer is rarely the
+  /// payee, so this says what the author did (the row header names them).
+  String get _status => pay.settled ? 'Paid' : 'Payment pending';
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

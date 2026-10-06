@@ -88,9 +88,48 @@ SonarPayLine? decodeSonarPayLine(String content) {
   }
 }
 
-/// `⚡PAYDONE` lines are hidden control rows that only settle a `⚡PAY`.
-bool isSonarPayControlLine(String content) =>
-    decodeSonarPayLine(content) is SonarPayDone;
+/// A message's payment lines split from its text. Sonar sends each line as
+/// a whole message; an agent usually wraps them in a sentence, so each line
+/// may also sit on its own line inside a longer message (no leading space;
+/// trailing whitespace ignored).
+@immutable
+class SonarPayContent {
+  const SonarPayContent(this.text, this.pays, this.dones);
+
+  /// The message without its payment lines, trimmed.
+  final String text;
+  final List<SonarPayReceipt> pays;
+  final List<SonarPayDone> dones;
+}
+
+SonarPayContent? parseSonarPayContent(String content) {
+  final pays = <SonarPayReceipt>[];
+  final dones = <SonarPayDone>[];
+  final kept = <String>[];
+  for (final rawLine in content.split('\n')) {
+    final line = decodeSonarPayLine(rawLine.trimRight());
+    switch (line) {
+      case final SonarPayReceipt pay:
+        pays.add(pay);
+      case final SonarPayDone done:
+        dones.add(done);
+      case null:
+        kept.add(rawLine);
+    }
+  }
+  if (pays.isEmpty && dones.isEmpty) return null;
+  return SonarPayContent(kept.join('\n').trim(), pays, dones);
+}
+
+/// A message of only `⚡PAYDONE` lines is a hidden control row that only
+/// settles a `⚡PAY`.
+bool isSonarPayControlLine(String content) {
+  final parsed = parseSonarPayContent(content);
+  return parsed != null &&
+      parsed.pays.isEmpty &&
+      parsed.dones.isNotEmpty &&
+      parsed.text.isEmpty;
+}
 
 String _key(String pubkey, String id) => '${pubkey.toLowerCase()}:$id';
 
@@ -102,30 +141,59 @@ Map<String, String?> collectSonarPaySettlements(
 ) {
   final settlements = <String, String?>{};
   for (final message in messages) {
-    final line = decodeSonarPayLine(message.content);
-    if (line is! SonarPayDone) continue;
-    final key = _key(message.pubkey, line.id);
-    if (!settlements.containsKey(key) ||
-        (settlements[key] == null && line.preimage != null)) {
-      settlements[key] = line.preimage;
+    final parsed = parseSonarPayContent(message.content);
+    if (parsed == null) continue;
+    for (final done in parsed.dones) {
+      final key = _key(message.pubkey, done.id);
+      if (!settlements.containsKey(key) ||
+          (settlements[key] == null && done.preimage != null)) {
+        settlements[key] = done.preimage;
+      }
     }
   }
   return settlements;
 }
 
-/// Bubble state for a message whose content is a `⚡PAY` line.
-SonarPayView? resolveSonarPayView(
+/// Text plus payment bubbles for a message that carries `⚡PAY` lines.
+@immutable
+class SonarPayMessage {
+  const SonarPayMessage({required this.text, required this.receipts});
+
+  /// Remaining message text, shown above the bubbles (may be empty).
+  final String text;
+  final List<SonarPayView> receipts;
+
+  @override
+  bool operator ==(Object other) =>
+      other is SonarPayMessage &&
+      other.text == text &&
+      listEquals(other.receipts, receipts);
+
+  @override
+  int get hashCode => Object.hash(text, Object.hashAll(receipts));
+}
+
+/// The view for a message with payment lines, or null for any other
+/// message (and for DONE-only control rows, which are hidden).
+SonarPayMessage? resolveSonarPayMessage(
   String content,
   String signerPubkey,
   Map<String, String?> settlements,
 ) {
-  final line = decodeSonarPayLine(content);
-  if (line is! SonarPayReceipt) return null;
-  final key = _key(signerPubkey, line.id);
-  return SonarPayView(
-    id: line.id,
-    sats: line.sats,
-    settled: settlements.containsKey(key),
-    preimage: settlements[key],
+  final parsed = parseSonarPayContent(content);
+  if (parsed == null || (parsed.pays.isEmpty && parsed.text.isEmpty)) {
+    return null;
+  }
+  return SonarPayMessage(
+    text: parsed.text,
+    receipts: [
+      for (final pay in parsed.pays)
+        SonarPayView(
+          id: pay.id,
+          sats: pay.sats,
+          settled: settlements.containsKey(_key(signerPubkey, pay.id)),
+          preimage: settlements[_key(signerPubkey, pay.id)],
+        ),
+    ],
   );
 }

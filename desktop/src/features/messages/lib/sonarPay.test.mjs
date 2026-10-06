@@ -6,8 +6,13 @@ import {
   decodeSonarPayLine,
   describeSonarPay,
   isSonarPayControlLine,
-  resolveSonarPayView,
+  parseSonarPayContent,
+  resolveSonarPayMessage,
 } from "./sonarPay.ts";
+
+// Single-receipt view of a message, for the ordering tests below.
+const viewOf = (content, signer, settlements) =>
+  resolveSonarPayMessage(content, signer, settlements)?.receipts[0];
 
 const PREIMAGE = "00".repeat(32);
 const ALICE = "aa".repeat(32);
@@ -69,17 +74,19 @@ test("DONE settles only a PAY from the same signer, in any order", () => {
     { pubkey: ALICE, content: "⚡PAY|1|p2|500" },
   ];
   const settlements = collectSonarPaySettlements(events);
-  assert.deepEqual(resolveSonarPayView("⚡PAY|1|p1|21", ALICE, settlements), {
+  assert.deepEqual(viewOf("⚡PAY|1|p1|21", ALICE, settlements), {
     id: "p1",
     sats: 21,
     settled: true,
     preimage: PREIMAGE,
   });
-  assert.deepEqual(
-    resolveSonarPayView("⚡PAY|1|p2|500", ALICE.toUpperCase(), settlements),
-    { id: "p2", sats: 500, settled: false, preimage: undefined },
-  );
-  assert.equal(resolveSonarPayView("hello", ALICE, settlements), undefined);
+  assert.deepEqual(viewOf("⚡PAY|1|p2|500", ALICE.toUpperCase(), settlements), {
+    id: "p2",
+    sats: 500,
+    settled: false,
+    preimage: undefined,
+  });
+  assert.equal(viewOf("hello", ALICE, settlements), undefined);
 });
 
 test("a DONE with a preimage wins over a bare DONE", () => {
@@ -87,10 +94,7 @@ test("a DONE with a preimage wins over a bare DONE", () => {
     { pubkey: ALICE, content: `⚡PAYDONE|2|p1|${PREIMAGE}` },
     { pubkey: ALICE, content: "⚡PAYDONE|2|p1" },
   ]);
-  assert.equal(
-    resolveSonarPayView("⚡PAY|1|p1|1", ALICE, settlements)?.preimage,
-    PREIMAGE,
-  );
+  assert.equal(viewOf("⚡PAY|1|p1|1", ALICE, settlements)?.preimage, PREIMAGE);
 });
 
 test("describes the bubble for previews", () => {
@@ -101,5 +105,53 @@ test("describes the bubble for previews", () => {
   assert.equal(
     describeSonarPay({ id: "x", sats: 21, settled: false }),
     "Sending 21 sats",
+  );
+});
+
+test("finds receipt lines inside an agent's sentence", () => {
+  const content = [
+    "Done, I paid the invoice for the coffee.",
+    "⚡PAY|1|p9|21",
+    `⚡PAYDONE|2|p9|${PREIMAGE}  `,
+    "",
+    "Anything else?",
+  ].join("\r\n");
+  const parsed = parseSonarPayContent(content);
+  assert.deepEqual(parsed?.pays, [{ id: "p9", sats: 21 }]);
+  assert.deepEqual(parsed?.dones, [{ id: "p9", preimage: PREIMAGE }]);
+  assert.equal(
+    parsed?.text,
+    "Done, I paid the invoice for the coffee.\r\n\r\nAnything else?",
+  );
+
+  // Same message settles its own bubble.
+  const view = resolveSonarPayMessage(
+    content,
+    ALICE,
+    collectSonarPaySettlements([{ pubkey: ALICE, content }]),
+  );
+  assert.equal(view?.receipts.length, 1);
+  assert.equal(view?.receipts[0].settled, true);
+  assert.equal(view?.receipts[0].preimage, PREIMAGE);
+  assert.match(view?.text ?? "", /^Done, I paid/);
+});
+
+test("indented or inline receipt text is not a receipt", () => {
+  assert.equal(parseSonarPayContent("  ⚡PAY|1|p1|21"), null);
+  assert.equal(parseSonarPayContent("I sent ⚡PAY|1|p1|21 earlier"), null);
+  assert.equal(parseSonarPayContent("```\n⚡PAY|1|p1|21x\n```"), null);
+});
+
+test("a message of only DONE lines is a hidden control row", () => {
+  assert.equal(isSonarPayControlLine("⚡PAYDONE|2|a\n⚡PAYDONE|2|b"), true);
+  assert.equal(isSonarPayControlLine("settled\n⚡PAYDONE|2|a"), false);
+  // Text with only DONE lines renders as that text, without the lines.
+  assert.deepEqual(
+    resolveSonarPayMessage("settled\n⚡PAYDONE|2|a", ALICE, new Map()),
+    { text: "settled", receipts: [] },
+  );
+  assert.equal(
+    resolveSonarPayMessage("⚡PAYDONE|2|a", ALICE, new Map()),
+    undefined,
   );
 });

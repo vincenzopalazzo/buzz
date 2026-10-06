@@ -195,8 +195,9 @@ class TimelineMessage {
   /// Root event ID of the thread (null for top-level messages).
   final String? rootId;
 
-  /// Sonar `⚡PAY` receipt state when the content is a payment line.
-  final SonarPayView? sonarPay;
+  /// Sonar `⚡PAY` receipts: the text without payment lines plus one bubble
+  /// per `⚡PAY` line.
+  final SonarPayMessage? sonarPay;
 
   const TimelineMessage({
     required this.id,
@@ -546,7 +547,7 @@ List<TimelineMessage> formatTimeline(
           parentId: threadRef.parentId,
           rootId: threadRef.rootId,
           sonarPay: isPayCarrier(event)
-              ? resolveSonarPayView(
+              ? resolveSonarPayMessage(
                   edit?.content ?? event.content,
                   event.pubkey,
                   sonarPaySettlements,
