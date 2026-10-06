@@ -155,3 +155,17 @@ test("a message of only DONE lines is a hidden control row", () => {
     undefined,
   );
 });
+
+test("preview text summarizes receipts and skips DONE-only messages", async () => {
+  const { sonarPayPreviewText } = await import("./sonarPay.ts");
+  assert.equal(sonarPayPreviewText("hello"), "hello");
+  assert.equal(
+    sonarPayPreviewText(
+      `Paid the coffee.\n⚡PAY|1|g1|2100\n⚡PAYDONE|2|g1|${PREIMAGE}`,
+    ),
+    "Paid the coffee. ⚡ Paid 2,100 sats",
+  );
+  assert.equal(sonarPayPreviewText("⚡PAY|1|g1|21"), "⚡ 21 sats payment");
+  assert.equal(sonarPayPreviewText("⚡PAYDONE|2|g1"), null);
+  assert.equal(sonarPayPreviewText("settled\n⚡PAYDONE|2|g1"), "settled");
+});

@@ -181,3 +181,24 @@ export function describeSonarPay(view: SonarPayView): string {
   const amount = `${view.sats.toLocaleString("en-US")} sats`;
   return view.settled ? `Paid ${amount}` : `Sending ${amount}`;
 }
+
+/**
+ * One-line text for previews that show raw message content: notifications,
+ * inbox snippets, search results. Receipt lines become "⚡ Paid 21 sats" (or
+ * "⚡ 21 sats payment" until a `⚡PAYDONE` in the same message settles it), the
+ * rest of the text is kept, and a `⚡PAYDONE`-only control message returns
+ * `null` so callers can skip it. Other messages come back unchanged.
+ */
+export function sonarPayPreviewText(content: string): string | null {
+  const parsed = parseSonarPayContent(content);
+  if (!parsed) return content;
+  if (parsed.pays.length === 0) {
+    return parsed.text === "" ? null : parsed.text;
+  }
+  const settled = new Set(parsed.dones.map((done) => done.id));
+  const summaries = parsed.pays.map((pay) => {
+    const amount = `${pay.sats.toLocaleString("en-US")} sats`;
+    return settled.has(pay.id) ? `⚡ Paid ${amount}` : `⚡ ${amount} payment`;
+  });
+  return [parsed.text, ...summaries].filter((part) => part !== "").join(" ");
+}
