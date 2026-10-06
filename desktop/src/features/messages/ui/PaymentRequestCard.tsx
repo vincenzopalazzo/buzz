@@ -21,6 +21,8 @@ import { useCopyFeedback } from "@/shared/ui/HoverCopyIndicator";
 import { useSmoothCorners } from "@/shared/ui/smoothCorners";
 import { StyledQrCode } from "@/shared/ui/styled-qr-code";
 
+const NO_RECEIPTS: readonly PaymentReceiptSummary[] = [];
+
 type PaymentRequestCardProps = {
   message: TimelineMessage;
   className?: string;
@@ -55,7 +57,12 @@ function useVerifiedReceiptIds(receipts: readonly PaymentReceiptSummary[]) {
         if (receipt.status !== "paid" || !receipt.preimage) continue;
         if (await verifyPaymentReceipt(receipt)) ids.add(receipt.id);
       }
-      if (!cancelled) setVerified(ids);
+      if (cancelled) return;
+      setVerified((current) =>
+        current.size === ids.size && [...ids].every((id) => current.has(id))
+          ? current
+          : ids,
+      );
     })();
     return () => {
       cancelled = true;
@@ -132,7 +139,7 @@ export function PaymentRequestCard({
     () => parsePaymentRequestTags(message.tags),
     [message.tags],
   );
-  const receipts = message.paymentReceipts ?? [];
+  const receipts = message.paymentReceipts ?? NO_RECEIPTS;
   const now = useNowSeconds(request?.expiry);
   const verifiedIds = useVerifiedReceiptIds(receipts);
 
