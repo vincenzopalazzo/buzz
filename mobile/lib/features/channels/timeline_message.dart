@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../../shared/relay/relay.dart';
 import '../../shared/custom_emoji/custom_emoji.dart';
 import '../../shared/mentions/mention_tags.dart';
+import '../../shared/sonar_pay/sonar_pay.dart';
 import 'channel_window.dart';
 
 enum SystemEventType {
@@ -194,6 +195,9 @@ class TimelineMessage {
   /// Root event ID of the thread (null for top-level messages).
   final String? rootId;
 
+  /// Sonar `⚡PAY` receipt state when the content is a payment line.
+  final SonarPayView? sonarPay;
+
   const TimelineMessage({
     required this.id,
     required this.pubkey,
@@ -207,6 +211,7 @@ class TimelineMessage {
     this.reactions = const [],
     this.parentId,
     this.rootId,
+    this.sonarPay,
   });
 
   /// Attachment messages stay visually distinct from surrounding messages,
@@ -455,6 +460,19 @@ List<TimelineMessage> formatTimeline(
     ];
   }
 
+  // Sonar payment receipts: fold every `⚡PAYDONE` (by signer) first; those
+  // control rows are then skipped and only settle the matching `⚡PAY`.
+  bool isPayCarrier(NostrEvent event) =>
+      event.kind == EventKind.streamMessage ||
+      event.kind == EventKind.streamMessageV2;
+  String effectiveContent(NostrEvent event) =>
+      edits[event.id]?.content ?? event.content;
+  final sonarPaySettlements = collectSonarPaySettlements([
+    for (final event in events)
+      if (isPayCarrier(event) && !deletedIds.contains(event.id))
+        (pubkey: event.pubkey, content: effectiveContent(event)),
+  ]);
+
   // 4. Filter to visible content events and build TimelineMessages.
   final result = <TimelineMessage>[];
   for (final event in events) {
@@ -499,12 +517,13 @@ List<TimelineMessage> formatTimeline(
       continue;
     }
 
+    if (isPayCarrier(event) && isSonarPayControlLine(effectiveContent(event))) {
+      continue;
+    }
+
     if (event.kind == EventKind.streamMessage ||
         event.kind == EventKind.streamMessageV2 ||
-        event.kind == EventKind.streamMessageDiff ||
-        // NIP-LP: the request's content is a plain-text fallback
-        // ("⚡ Payment request: 500 sats — lunch") until mobile grows a card.
-        event.kind == EventKind.paymentRequest) {
+        event.kind == EventKind.streamMessageDiff) {
       final edit = edits[event.id];
       final effectiveTags = edit?.tags ?? event.tags;
       // Include both notify (`p`) and reference-only (`mention`) tags —
@@ -526,6 +545,13 @@ List<TimelineMessage> formatTimeline(
           reactions: reactionsFor(event.id),
           parentId: threadRef.parentId,
           rootId: threadRef.rootId,
+          sonarPay: isPayCarrier(event)
+              ? resolveSonarPayView(
+                  edit?.content ?? event.content,
+                  event.pubkey,
+                  sonarPaySettlements,
+                )
+              : null,
         ),
       );
     }

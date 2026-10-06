@@ -2,11 +2,10 @@ use tauri::State;
 
 use crate::{app_state::AppState, models::ChannelPageCursor, relay::query_relay};
 
-const TIMELINE_KINDS: [u32; 12] = [
+const TIMELINE_KINDS: [u32; 11] = [
     9,
     40002,
     40008,
-    40009,
     40099,
     43001,
     43002,

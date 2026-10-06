@@ -225,7 +225,7 @@ enum Cmd {
     /// Add, remove, and list emoji reactions
     #[command(subcommand)]
     Reactions(ReactionsCmd),
-    /// Lightning payment requests and receipts (NIP-LP); Buzz never holds funds
+    /// Sonar chat payment receipts (⚡PAY bubbles); Buzz never holds funds
     #[command(subcommand)]
     Pay(PayCmd),
     /// Manage your custom emoji set (workspace palette is the union of all members' sets)
@@ -830,111 +830,51 @@ pub enum ReactionsCmd {
 
 #[derive(Subcommand)]
 pub enum PayCmd {
-    /// Post a payment request card ("pay N sats") into a channel or DM
+    /// Post a Sonar payment receipt after you paid (renders as a payment bubble)
     #[command(
-        after_help = "Examples:\n  buzz pay request --channel $CH --sats 500 --bolt11 lnbc5u1... --payment-hash <hex> --memo lunch --expires-in 3600\n  buzz pay request --channel $CH --sats 21 --bolt12 lno1... --lud16 alice@example.com\n\nAt least one of --bolt11, --bolt12, --lud16, --bip353 is required. Amounts are whole sats (--sats) or millisats (--msat)."
-    )]
-    Request {
-        /// Channel or DM UUID
-        #[arg(long)]
-        channel: String,
-        /// Amount in whole satoshis (exclusive with --msat)
-        #[arg(long)]
-        sats: Option<u64>,
-        /// Amount in millisatoshis (exclusive with --sats)
-        #[arg(long)]
-        msat: Option<u64>,
-        /// BOLT11 invoice minted by the payee for exactly this amount
-        #[arg(long)]
-        bolt11: Option<String>,
-        /// BOLT12 offer (lno1...)
-        #[arg(long)]
-        bolt12: Option<String>,
-        /// LUD-16 Lightning Address (user@domain)
-        #[arg(long)]
-        lud16: Option<String>,
-        /// BIP-353 human-readable address (user@domain)
-        #[arg(long)]
-        bip353: Option<String>,
-        /// Hex payment hash of the bolt11; lets clients bind receipts to this request
-        #[arg(long = "payment-hash")]
-        payment_hash: Option<String>,
-        /// Short memo shown on the card
-        #[arg(long)]
-        memo: Option<String>,
-        /// Seconds until the request expires (clamp to the invoice expiry)
-        #[arg(long = "expires-in")]
-        expires_in: Option<u64>,
-        /// Payee pubkey (64-char hex); defaults to your own key
-        #[arg(long)]
-        payee: Option<String>,
-        /// Plain-text fallback content; generated from amount and memo when omitted
-        #[arg(long)]
-        content: Option<String>,
-    },
-    /// Report the outcome of paying a request (paid, or --failed)
-    #[command(
-        after_help = "Examples:\n  buzz pay receipt --channel $CH --request <id> --sats 500 --payment-hash <hex> --preimage <hex>\n  buzz pay receipt --channel $CH --request <id> --sats 500 --failed --reason \"no route\"\n\nA receipt is your claim; clients show it as verified only when the preimage hashes to the request's payment_hash."
+        after_help = "Buzz never pays: pay with your own wallet first, then report it here.\n\nPosts `⚡PAY|1|<id>|<sats>` and then `⚡PAYDONE|2|<id>[|<preimage>]` as ordinary messages\n(Sonar's chat receipt wire format). Buzz shows the first as a gold payment bubble\nand uses the second, hidden, to mark it settled.\n\nExamples:\n  buzz pay receipt --channel $CH --sats 21 --preimage <64-hex from your wallet>\n  buzz pay receipt --channel $CH --sats 500 --reply-to <event-id>\n  buzz pay receipt --channel $CH --sats 500 --pending   # settle later with `buzz pay done`"
     )]
     Receipt {
-        /// Channel or DM UUID (same as the request)
-        #[arg(long)]
-        channel: String,
-        /// Payment request event ID (64-char hex)
-        #[arg(long)]
-        request: String,
-        /// Amount sent in whole satoshis (exclusive with --msat)
-        #[arg(long)]
-        sats: Option<u64>,
-        /// Amount sent in millisatoshis (exclusive with --sats)
-        #[arg(long)]
-        msat: Option<u64>,
-        /// Hex payment hash (required unless --failed)
-        #[arg(long = "payment-hash")]
-        payment_hash: Option<String>,
-        /// Hex preimage returned by your wallet (proof of settlement)
-        #[arg(long)]
-        preimage: Option<String>,
-        /// Routing fee paid, in millisatoshis
-        #[arg(long = "fee-msat")]
-        fee_msat: Option<u64>,
-        /// Report a failed payment instead of a settled one
-        #[arg(long)]
-        failed: bool,
-        /// Short failure reason (with --failed)
-        #[arg(long)]
-        reason: Option<String>,
-        /// Payee pubkey to notify (the request's p tag)
-        #[arg(long)]
-        payee: Option<String>,
-        /// Plain-text fallback content; generated when omitted
-        #[arg(long)]
-        content: Option<String>,
-    },
-    /// List payment requests in a channel with their derived state
-    List {
         /// Channel or DM UUID
         #[arg(long)]
         channel: String,
-        /// Maximum requests to return (default 50, max 200)
+        /// Amount paid, in whole satoshis
         #[arg(long)]
-        limit: Option<u32>,
-        /// Only requests in this state: pending, expired, failed, paid, verified
+        sats: u64,
+        /// Lightning preimage returned by your wallet (64 hex chars); shown as proof
         #[arg(long)]
-        state: Option<String>,
+        preimage: Option<String>,
+        /// Receipt id (default: 16 random hex chars)
+        #[arg(long)]
+        id: Option<String>,
+        /// Post in the thread of this event (64-char hex)
+        #[arg(long = "reply-to")]
+        reply_to: Option<String>,
+        /// Post only the `⚡PAY` line; the payment has not settled yet
+        #[arg(long)]
+        pending: bool,
     },
-    /// Show one payment request with every receipt and its derived state
-    Show {
-        /// Payment request event ID (64-char hex)
+    /// Mark an earlier `⚡PAY` receipt of yours as settled (`⚡PAYDONE`)
+    Done {
+        /// Channel or DM UUID (same as the receipt)
         #[arg(long)]
-        request: String,
+        channel: String,
+        /// Receipt id printed by `buzz pay receipt` (`pay_id`)
+        #[arg(long)]
+        id: String,
+        /// Lightning preimage returned by your wallet (64 hex chars)
+        #[arg(long)]
+        preimage: Option<String>,
+        /// Post in the thread of this event (64-char hex)
+        #[arg(long = "reply-to")]
+        reply_to: Option<String>,
     },
     /// Check offline that SHA256(preimage) == payment_hash (exit 0 iff it matches)
     Verify {
         /// Hex preimage (64 chars)
         #[arg(long)]
         preimage: String,
-        /// Hex payment hash (64 chars)
+        /// Hex payment hash from your own invoice (64 chars)
         #[arg(long = "payment-hash")]
         payment_hash: String,
     },
@@ -2595,10 +2535,7 @@ mod tests {
             vec!["get", "history", "restore", "set"]
         );
         assert_eq!(names(&cmd, "reactions"), vec!["add", "get", "remove"]);
-        assert_eq!(
-            names(&cmd, "pay"),
-            vec!["list", "receipt", "request", "show", "verify"]
-        );
+        assert_eq!(names(&cmd, "pay"), vec!["done", "receipt", "verify"]);
         assert_eq!(
             names(&cmd, "emoji"),
             vec!["export", "import", "list", "rm", "set"]
@@ -2711,7 +2648,7 @@ mod tests {
             ("messages", 8),
             ("pack", 2),
             ("patches", 4),
-            ("pay", 5),
+            ("pay", 3),
             ("pr", 5),
             ("projects", 8),
             ("reactions", 3),

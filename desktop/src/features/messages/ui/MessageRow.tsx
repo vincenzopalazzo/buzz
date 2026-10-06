@@ -3,7 +3,6 @@ import { AlertTriangle } from "lucide-react";
 import {
   depthGuideActionsEqual,
   numberArrayEqual,
-  paymentReceiptsEqual,
   reactionsEqual,
   tagsEqual,
 } from "@/features/messages/lib/messageRowEquality";
@@ -31,7 +30,6 @@ import {
 } from "@/features/messages/lib/threadTreeLayout";
 import {
   KIND_HUDDLE_STARTED,
-  KIND_PAYMENT_REQUEST,
   KIND_STREAM_MESSAGE_DIFF,
 } from "@/shared/constants/kinds";
 import { getConfigNudgeAuthorPubkey } from "@/features/messages/ui/configNudgeAuthPubkey";
@@ -59,7 +57,7 @@ import {
 } from "./MessageHeader";
 import { MessageTimestamp } from "./MessageTimestamp";
 import { SentFromThreadLine } from "./SentFromThreadLine";
-import { PaymentRequestCard } from "./PaymentRequestCard";
+import { SonarPayBubble } from "./SonarPayBubble";
 import { WaveMessageAttachment } from "./WaveMessageAttachment";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/shared/ui/tooltip";
 import { useMessageAgentAddressPrefix } from "./MessageAgentAddressPrefix";
@@ -409,8 +407,6 @@ export const MessageRow = React.memo(
               />
             </React.Suspense>
           );
-        case KIND_PAYMENT_REQUEST:
-          return <PaymentRequestCard className="mt-1" message={message} />;
         case KIND_HUDDLE_STARTED:
           return (
             <HuddleAttachment
@@ -420,6 +416,18 @@ export const MessageRow = React.memo(
             />
           );
         default: {
+          if (message.sonarPay) {
+            return (
+              <SonarPayBubble
+                className="mt-1"
+                mine={
+                  !!currentPubkey &&
+                  message.signerPubkey === currentPubkey.toLowerCase()
+                }
+                pay={message.sonarPay}
+              />
+            );
+          }
           const waveMessage = parseWaveMessageContent(message.body);
           if (waveMessage) {
             return (
@@ -966,10 +974,9 @@ export const MessageRow = React.memo(
     // checks made every row re-render on every streamed event in an open
     // thread (see messageRowEquality.ts).
     reactionsEqual(prev.message.reactions, next.message.reactions) &&
-    paymentReceiptsEqual(
-      prev.message.paymentReceipts,
-      next.message.paymentReceipts,
-    ) &&
+    // A `⚡PAYDONE` arriving later settles the bubble without changing body.
+    prev.message.sonarPay?.settled === next.message.sonarPay?.settled &&
+    prev.message.sonarPay?.preimage === next.message.sonarPay?.preimage &&
     tagsEqual(prev.message.tags, next.message.tags) &&
     prev.message.role === next.message.role &&
     prev.message.personaDisplayName === next.message.personaDisplayName &&

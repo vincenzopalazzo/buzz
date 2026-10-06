@@ -773,3 +773,69 @@ test("verified agent owner may publish a suppression edit", () => {
     true,
   );
 });
+
+// ── Sonar chat payment receipts (⚡PAY / ⚡PAYDONE) ─────────────────────────
+
+const PREIMAGE_ZERO = "00".repeat(32);
+const HEX64_C = "c".repeat(64);
+const HEX64_D = "d".repeat(64);
+
+test("⚡PAY renders a pending bubble; ⚡PAYDONE settles it and is hidden", () => {
+  const pay = streamMessage({ id: HEX64_A, content: "⚡PAY|1|p1|21" });
+  const done = streamMessage({
+    id: HEX64_B,
+    created_at: 1_700_000_001,
+    content: `⚡PAYDONE|2|p1|${PREIMAGE_ZERO}`,
+  });
+
+  const pending = formatTimelineMessages([pay], null, undefined, null);
+  assert.equal(pending.length, 1);
+  assert.deepEqual(pending[0].sonarPay, {
+    id: "p1",
+    sats: 21,
+    settled: false,
+    preimage: undefined,
+  });
+
+  // DONE first (it can race ahead on relays): same result, DONE row hidden.
+  const settled = formatTimelineMessages([done, pay], null, undefined, null);
+  assert.deepEqual(
+    settled.map((m) => m.id),
+    [HEX64_A],
+  );
+  assert.deepEqual(settled[0].sonarPay, {
+    id: "p1",
+    sats: 21,
+    settled: true,
+    preimage: PREIMAGE_ZERO,
+  });
+  assert.equal(countTopLevelTimelineRows([done, pay]), 1);
+});
+
+test("⚡PAYDONE from another signer does not settle someone else's ⚡PAY", () => {
+  const pay = streamMessage({ id: HEX64_A, content: "⚡PAY|1|p1|21" });
+  const forged = streamMessage({
+    id: HEX64_B,
+    pubkey: PUBKEY_B,
+    content: "⚡PAYDONE|2|p1",
+  });
+  const [row] = formatTimelineMessages([pay, forged], null, undefined, null);
+  assert.equal(row.sonarPay?.settled, false);
+});
+
+test("deleted ⚡PAYDONE stops settling; plain text and unknown versions stay text", () => {
+  const pay = streamMessage({ id: HEX64_A, content: "⚡PAY|1|p1|21" });
+  const done = streamMessage({ id: HEX64_B, content: "⚡PAYDONE|2|p1" });
+  const deletion = deletionEvent(5, HEX64_B, { id: HEX64_C, pubkey: PUBKEY_A });
+  const plain = streamMessage({ id: HEX64_D, content: "⚡PAY|9|p2|21" });
+  const rows = formatTimelineMessages(
+    [pay, done, deletion, plain],
+    null,
+    undefined,
+    null,
+  );
+  const byId = new Map(rows.map((m) => [m.id, m]));
+  assert.equal(byId.get(HEX64_A)?.sonarPay?.settled, false);
+  assert.equal(byId.get(HEX64_D)?.sonarPay, undefined);
+  assert.equal(byId.get(HEX64_D)?.body, "⚡PAY|9|p2|21");
+});

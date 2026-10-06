@@ -4,7 +4,6 @@ import test from "node:test";
 import {
   depthGuideActionsEqual,
   numberArrayEqual,
-  paymentReceiptsEqual,
   reactionsEqual,
   tagsEqual,
 } from "./messageRowEquality.ts";
@@ -109,40 +108,6 @@ test("depthGuideActionsEqual: same values (message by id) → equal", () => {
     depthGuideActionsEqual(
       [{ active: false, depth: 1, label: "Collapse replies", message }],
       [{ active: true, depth: 1, label: "Collapse replies", message }],
-    ),
-    false,
-  );
-});
-
-test("paymentReceiptsEqual: fresh identity, same values → equal; any change → not equal", () => {
-  const receipt = () => ({
-    id: "ff".repeat(32),
-    payerPubkey: "ee".repeat(32),
-    payerDisplayName: "bob",
-    createdAt: 1,
-    channelId: "c",
-    requestId: "aa".repeat(32),
-    status: "paid",
-    amountMsat: 21_000,
-    paymentHash: "66".repeat(32),
-    preimage: "00".repeat(32),
-  });
-  assert.equal(paymentReceiptsEqual(undefined, undefined), true);
-  assert.equal(paymentReceiptsEqual([receipt()], [receipt()]), true);
-  assert.equal(paymentReceiptsEqual(undefined, [receipt()]), false);
-  assert.equal(paymentReceiptsEqual([receipt()], []), false);
-  assert.equal(
-    paymentReceiptsEqual([receipt()], [{ ...receipt(), status: "failed" }]),
-    false,
-  );
-  assert.equal(
-    paymentReceiptsEqual([receipt()], [{ ...receipt(), preimage: undefined }]),
-    false,
-  );
-  assert.equal(
-    paymentReceiptsEqual(
-      [receipt()],
-      [{ ...receipt(), payerDisplayName: "alice" }],
     ),
     false,
   );
