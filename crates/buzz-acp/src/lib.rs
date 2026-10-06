@@ -5682,6 +5682,10 @@ mod agent_draft_prompt_tests {
         assert!(prompt.contains("each on its own line, outside any code block"));
         assert!(prompt.contains("Pending or unknown outcome: write no receipt lines"));
         assert!(prompt.contains("never pay without an explicit request"));
+        // Every rail Buzz renders: BOLT11, BOLT12, and BIP-353 names that the
+        // markdown renderer keeps out of mailto links via the `₿` prefix.
+        assert!(prompt.contains("a BOLT11 invoice, a BOLT12 offer, or a BIP-353 name"));
+        assert!(prompt.contains("Write a BIP-353 name with its `₿` prefix"));
     }
 
     #[test]
