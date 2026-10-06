@@ -59,6 +59,7 @@ import {
 import { MessageTimestamp } from "./MessageTimestamp";
 import { SentFromThreadLine } from "./SentFromThreadLine";
 import { SonarPayBubble } from "./SonarPayBubble";
+import { sonarPayPreviewText } from "@/features/messages/lib/sonarPay";
 import { WaveMessageAttachment } from "./WaveMessageAttachment";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/shared/ui/tooltip";
 import { useMessageAgentAddressPrefix } from "./MessageAgentAddressPrefix";
@@ -235,7 +236,7 @@ export const MessageRow = React.memo(
         openReminder({
           eventId: msg.id,
           channelId: channelId ?? "",
-          preview: msg.body.slice(0, 100),
+          preview: (sonarPayPreviewText(msg.body) ?? "").slice(0, 100),
           authorPubkey: msg.pubkey ?? "",
         });
       },

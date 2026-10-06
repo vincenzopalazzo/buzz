@@ -80,3 +80,10 @@ test("summarizeThreadRoot preserves Unicode boundaries, strips controls, and red
     "Public update",
   );
 });
+
+test("summarizeThreadRoot reads Sonar receipts as a payment summary", () => {
+  assert.equal(
+    summarizeThreadRoot("Paid it.\n⚡PAY|1|g1|21\n⚡PAYDONE|2|g1"),
+    "Paid it. ⚡ Paid 21 sats",
+  );
+});
