@@ -11,6 +11,7 @@ import { MessageActionBar } from "@/features/messages/ui/MessageActionBar";
 import { MessageAgentOwner } from "@/features/messages/ui/MessageAgentOwner";
 import { MessageMetaSeparator } from "@/features/messages/ui/MessageHeader";
 import { MessageReactions } from "@/features/messages/ui/MessageReactions";
+import { SonarPayBubble } from "@/features/messages/ui/SonarPayBubble";
 import { UnreadDivider } from "@/features/messages/ui/UnreadDivider";
 import { useReactionHandler } from "@/features/messages/ui/useReactionHandler";
 import { useMessageEmoji } from "@/features/messages/lib/useMessageEmoji";
@@ -262,32 +263,45 @@ export function InboxMessageRow({
             className={isContinuation ? "mt-0" : "mt-conversation-body"}
             data-testid="message-body"
           >
-            <VideoReviewCommentMarkdown
-              className={cn(
-                "max-w-full text-left text-message text-foreground",
-                emojiOnly &&
-                  "text-4xl leading-tight [&_p]:leading-tight [&_img[data-custom-emoji]]:h-[1.45em] [&_img[data-custom-emoji]]:align-middle [&_button:has(img[data-custom-emoji])]:align-middle",
-              )}
-              // Only pass the author pubkey for agent-authored messages so
-              // config-nudge cards can authenticate the sender. Uses the
-              // raw event signer (signerPubkey), not a relay-delegated display
-              // author, because the agent itself must have signed the card.
-              configNudgeAuthorPubkey={getConfigNudgeAuthorPubkey(
-                timelineMessage,
-                isKnownAgentPubkey,
-              )}
-              content={message.content}
-              messageId={message.id}
-              linkPreviewsSuppressed={hasLinkPreviewSuppression(
-                timelineMessage.tags,
-              )}
-              customEmoji={customEmoji}
-              imetaByUrl={imetaByUrl}
-              mentionNames={message.mentionNames}
-              mentionPubkeysByName={message.mentionPubkeysByName}
-              videoReviewCommentRootId={videoReviewCommentRootId}
-              videoReviewContext={videoReviewContext}
-            />
+            {message.sonarPay && !message.sonarPay.text ? null : (
+              <VideoReviewCommentMarkdown
+                className={cn(
+                  "max-w-full text-left text-message text-foreground",
+                  emojiOnly &&
+                    "text-4xl leading-tight [&_p]:leading-tight [&_img[data-custom-emoji]]:h-[1.45em] [&_img[data-custom-emoji]]:align-middle [&_button:has(img[data-custom-emoji])]:align-middle",
+                )}
+                // Only pass the author pubkey for agent-authored messages so
+                // config-nudge cards can authenticate the sender. Uses the
+                // raw event signer (signerPubkey), not a relay-delegated display
+                // author, because the agent itself must have signed the card.
+                configNudgeAuthorPubkey={getConfigNudgeAuthorPubkey(
+                  timelineMessage,
+                  isKnownAgentPubkey,
+                )}
+                // Sonar receipts: text without its payment lines, bubbles below.
+                content={
+                  message.sonarPay ? message.sonarPay.text : message.content
+                }
+                messageId={message.id}
+                linkPreviewsSuppressed={hasLinkPreviewSuppression(
+                  timelineMessage.tags,
+                )}
+                customEmoji={customEmoji}
+                imetaByUrl={imetaByUrl}
+                mentionNames={message.mentionNames}
+                mentionPubkeysByName={message.mentionPubkeysByName}
+                videoReviewCommentRootId={videoReviewCommentRootId}
+                videoReviewContext={videoReviewContext}
+              />
+            )}
+            {message.sonarPay?.receipts.map((pay) => (
+              <SonarPayBubble
+                className="mt-1"
+                key={pay.id}
+                mine={false}
+                pay={pay}
+              />
+            ))}
             <MessageReactions
               canToggle={canToggleReactions}
               messageId={message.id}

@@ -1,3 +1,4 @@
+import { sonarPayPreviewText } from "@/features/messages/lib/sonarPay";
 const NOTIFICATION_BODY_MAX_LENGTH = 140;
 
 /**
@@ -80,7 +81,9 @@ export function formatMessageNotification(opts: {
   channelName?: string | null;
   content: string;
 }): { title: string; body: string } {
-  const { source, content } = opts;
+  const { source } = opts;
+  // Sonar receipt lines read as "⚡ Paid 21 sats", never as raw wire text.
+  const content = sonarPayPreviewText(opts.content) ?? "";
   const senderName = opts.senderName?.trim() || null;
   const channelName = opts.channelName?.trim() || null;
   const body = truncateNotificationBody(

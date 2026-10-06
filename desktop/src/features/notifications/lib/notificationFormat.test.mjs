@@ -161,3 +161,13 @@ test("senderNameFromSummary prefers displayName, then NIP-05, never a pubkey", (
   assert.equal(senderNameFromSummary(null), null);
   assert.equal(senderNameFromSummary(undefined), null);
 });
+
+test("formatMessageNotification summarizes Sonar receipt lines", () => {
+  const { body } = formatMessageNotification({
+    source: "dm",
+    senderName: "goose",
+    content: "Paid the coffee.\n⚡PAY|1|g1|2100\n⚡PAYDONE|2|g1",
+  });
+  assert.equal(body, "Paid the coffee. ⚡ Paid 2,100 sats");
+  assert.ok(!body.includes("⚡PAY|"), "no raw wire text in notifications");
+});
