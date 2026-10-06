@@ -1,4 +1,5 @@
 import '../../shared/relay/relay.dart';
+import '../../shared/sonar_pay/sonar_pay.dart';
 
 final _hexPubkey = RegExp(r'^[0-9a-f]{64}$');
 
@@ -23,5 +24,6 @@ bool isIncomingChannelMessageFromOther(NostrEvent event, String currentPubkey) {
   final self = currentPubkey.trim().toLowerCase();
   return event.channelId != null &&
       EventKind.channelMessageEventKinds.contains(event.kind) &&
+      !isSonarPayControlEvent(event.kind, event.content) &&
       event.pubkey.toLowerCase() != self;
 }

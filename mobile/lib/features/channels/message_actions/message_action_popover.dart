@@ -291,7 +291,7 @@ List<_PopoverMessageAction> _buildPopoverMessageActions({
               target: ReminderTarget(
                 eventId: message.id,
                 channelId: channelId,
-                preview: message.content.characters
+                preview: (sonarPayPreviewText(message.content) ?? '').characters
                     .take(_reminderPreviewLength)
                     .toString(),
                 authorPubkey: message.pubkey,

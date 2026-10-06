@@ -105,6 +105,19 @@ void main() {
     });
   });
 
+  test('preview text summarizes receipts and hides control rows', () {
+    expect(sonarPayPreviewText('hello'), 'hello');
+    expect(
+      sonarPayPreviewText(
+        'Paid the coffee.\n⚡PAY|1|g1|2100\n⚡PAYDONE|2|g1|$_preimage',
+      ),
+      'Paid the coffee. ⚡ Paid 2,100 sats',
+    );
+    expect(sonarPayPreviewText('⚡PAY|1|g1|21'), '⚡ 21 sats payment');
+    expect(sonarPayPreviewText('⚡PAYDONE|2|g1'), isNull);
+    expect(sonarPayPreviewText('settled\n⚡PAYDONE|2|g1'), 'settled');
+  });
+
   testWidgets('bubble shows amount, status and a copyable proof', (
     tester,
   ) async {
