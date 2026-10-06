@@ -34,14 +34,8 @@ import {
   KIND_STREAM_MESSAGE_V2,
   KIND_STREAM_MESSAGE_EDIT,
   KIND_STREAM_MESSAGE_DIFF,
-  KIND_PAYMENT_RECEIPT,
-  KIND_PAYMENT_REQUEST,
   KIND_SYSTEM_MESSAGE,
 } from "@/shared/constants/kinds";
-import {
-  type PaymentReceiptSummary,
-  parsePaymentReceiptTags,
-} from "@/features/messages/lib/payment";
 import { resolveEventAuthorPubkey } from "@/shared/lib/authors";
 import { normalizePubkey } from "@/shared/lib/pubkey";
 import { channelRoleMap } from "@/shared/lib/rosterDerivations";
@@ -52,15 +46,37 @@ import { formatTime } from "@/features/messages/lib/dateFormatters";
 // can exercise the exact same source the renderer uses.
 import { applyEditTagOverlay } from "@/features/messages/lib/applyEditTagOverlay.mjs";
 import { truncateNpub } from "@/shared/lib/pubkey";
+import {
+  collectSonarPaySettlements,
+  isSonarPayControlLine,
+  resolveSonarPayView,
+} from "@/features/messages/lib/sonarPay";
 
 const HEX_RE = /^[0-9a-f]+$/i;
+
+/** Plain chat kinds that can carry a Sonar `⚡PAY` / `⚡PAYDONE` line. */
+function isSonarPayCarrierKind(kind: number) {
+  return kind === KIND_STREAM_MESSAGE || kind === KIND_STREAM_MESSAGE_V2;
+}
+
+/**
+ * A Sonar `⚡PAYDONE` control message: never its own row, never unread. It
+ * only flips the matching `⚡PAY` bubble to settled (see `sonarPay.ts`).
+ */
+export function isSonarPayControlEvent(event: {
+  kind: number;
+  content: string;
+}) {
+  return (
+    isSonarPayCarrierKind(event.kind) && isSonarPayControlLine(event.content)
+  );
+}
 
 export function isTimelineContentEvent(event: RelayEvent) {
   return (
     event.kind === KIND_STREAM_MESSAGE ||
     event.kind === KIND_STREAM_MESSAGE_V2 ||
     event.kind === KIND_STREAM_MESSAGE_DIFF ||
-    event.kind === KIND_PAYMENT_REQUEST ||
     event.kind === KIND_SYSTEM_MESSAGE ||
     event.kind === KIND_JOB_REQUEST ||
     event.kind === KIND_JOB_ACCEPTED ||
@@ -114,7 +130,11 @@ export function countTopLevelTimelineRows(events: RelayEvent[]): number {
 
   let count = 0;
   for (const event of events) {
-    if (!isTimelineContentEvent(event) || deletedEventIds.has(event.id)) {
+    if (
+      !isTimelineContentEvent(event) ||
+      deletedEventIds.has(event.id) ||
+      isSonarPayControlEvent(event)
+    ) {
       continue;
     }
     const { parentId } = getThreadReference(event.tags);
@@ -304,8 +324,30 @@ export function formatTimelineMessages(
     }
   }
 
+  // Sonar payment receipts: fold every `⚡PAYDONE` (by signer) first, then
+  // hide those control rows. Uses the effective (edited) body so the row and
+  // its bubble always agree.
+  const effectiveContent = (event: RelayEvent) =>
+    editsByTargetId.get(event.id)?.content ?? event.content;
+  const sonarPaySettlements = collectSonarPaySettlements(
+    events
+      .filter(
+        (event) =>
+          isSonarPayCarrierKind(event.kind) && !deletedEventIds.has(event.id),
+      )
+      .map((event) => ({
+        pubkey: event.pubkey,
+        content: effectiveContent(event),
+      })),
+  );
   const visibleEvents = events.filter(
-    (event) => isTimelineContentEvent(event) && !deletedEventIds.has(event.id),
+    (event) =>
+      isTimelineContentEvent(event) &&
+      !deletedEventIds.has(event.id) &&
+      !isSonarPayControlEvent({
+        kind: event.kind,
+        content: effectiveContent(event),
+      }),
   );
   const eventsById = new Map(visibleEvents.map((event) => [event.id, event]));
   const reactionPresence = new Map<
@@ -403,40 +445,6 @@ export function formatTimelineMessages(
 
     current.set(emoji, existing);
     reactionsByEventId.set(targetId, current);
-  }
-
-  // NIP-LP receipts (kind 40010) overlay their payment request row, joined
-  // by the bare `e` tag. Order-independent: a receipt that arrives before
-  // its request simply waits in this map until the request renders.
-  const paymentReceiptsByRequestId = new Map<string, PaymentReceiptSummary[]>();
-  for (const event of events) {
-    if (event.kind !== KIND_PAYMENT_RECEIPT || deletedEventIds.has(event.id)) {
-      continue;
-    }
-    const parsed = parsePaymentReceiptTags(event.tags);
-    if (!parsed || deletedEventIds.has(parsed.requestId)) {
-      continue;
-    }
-    const payerPubkey = event.pubkey.toLowerCase();
-    const profile = profiles?.[payerPubkey];
-    const payerDisplayName =
-      currentPubkeyLower && payerPubkey === currentPubkeyLower
-        ? "You"
-        : profile?.displayName?.trim() ||
-          profile?.nip05Handle?.trim() ||
-          truncateNpub(payerPubkey);
-    const list = paymentReceiptsByRequestId.get(parsed.requestId) ?? [];
-    list.push({
-      ...parsed,
-      id: event.id,
-      payerPubkey,
-      payerDisplayName,
-      createdAt: event.created_at,
-    });
-    paymentReceiptsByRequestId.set(parsed.requestId, list);
-  }
-  for (const list of paymentReceiptsByRequestId.values()) {
-    list.sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id));
   }
 
   const authorPubkeyByEventId = new Map<string, string>();
@@ -581,10 +589,15 @@ export function formatTimelineMessages(
           )
           .map(({ earliestCreatedAt: _drop, ...pill }) => pill);
       })(),
-      paymentReceipts:
-        event.kind === KIND_PAYMENT_REQUEST
-          ? paymentReceiptsByRequestId.get(event.id)
-          : undefined,
+      // Bound to the raw signer, not a relay-delegated display author: only
+      // the key that signed the `⚡PAY` can settle it with a `⚡PAYDONE`.
+      sonarPay: isSonarPayCarrierKind(event.kind)
+        ? resolveSonarPayView(
+            edit ? edit.content : event.content,
+            event.pubkey,
+            sonarPaySettlements,
+          )
+        : undefined,
     };
   });
 }
@@ -628,14 +641,6 @@ export function collectReactionActorPubkeys(
 
   const pubkeys = new Set<string>();
   for (const event of events) {
-    if (
-      event.kind === KIND_PAYMENT_RECEIPT &&
-      !deletedEventIds.has(event.id.toLowerCase())
-    ) {
-      // Receipt payers render by name on the request card.
-      pubkeys.add(event.pubkey.toLowerCase());
-      continue;
-    }
     if (
       event.kind !== KIND_REACTION ||
       deletedEventIds.has(event.id.toLowerCase())

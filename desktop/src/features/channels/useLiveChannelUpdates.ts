@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { channelsQueryKey } from "@/features/channels/hooks";
 import { updateChannelLastMessageAt } from "@/features/channels/lib/channelRecency";
 import { mergeTimelineCacheMessages } from "@/features/messages/hooks";
+import { isSonarPayControlEvent } from "@/features/messages/lib/formatTimelineMessages";
 import { channelMessagesKey } from "@/features/messages/lib/messageQueryKeys";
 import {
   getChannelIdFromTags,
@@ -207,8 +208,13 @@ export function useLiveChannelUpdates(
 
   const handleDmEvent = React.useEffectEvent(
     (event: RelayEvent, isFirstNotificationDelivery: boolean) => {
-      // Only human-visible message kinds should fire DM notifications.
-      if (!isDmNotifiableKind(event.kind) || !isFirstNotificationDelivery) {
+      // Only human-visible message kinds should fire DM notifications. A
+      // Sonar `⚡PAYDONE` is a hidden control row, so it never notifies.
+      if (
+        !isDmNotifiableKind(event.kind) ||
+        isSonarPayControlEvent(event) ||
+        !isFirstNotificationDelivery
+      ) {
         return;
       }
 
@@ -267,10 +273,10 @@ export function useLiveChannelUpdates(
     ) {
       options.onLiveMention();
     }
-    const isUnreadTriggerKind = isChannelUnreadTriggerKind(
-      event.kind,
-      isDmChannel,
-    );
+    // A Sonar `⚡PAYDONE` only settles an existing bubble: no row, no unread.
+    const isUnreadTriggerKind =
+      isChannelUnreadTriggerKind(event.kind, isDmChannel) &&
+      !isSonarPayControlEvent(event);
 
     // Recency is presentation state, not notification state. Every recognized
     // message advances Recent ordering, including self-authored and muted

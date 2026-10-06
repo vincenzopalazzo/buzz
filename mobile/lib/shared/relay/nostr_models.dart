@@ -34,10 +34,6 @@ abstract final class EventKind {
   static const channelWindowBounds = 39006;
   static const streamMessageEdit = 40003;
   static const streamMessageDiff = 40008;
-  // NIP-LP Lightning payments: a request renders as a card row, a receipt
-  // overlays its request (joined by a bare `e` tag). See docs/nips/NIP-LP.md.
-  static const paymentRequest = 40009;
-  static const paymentReceipt = 40010;
   static const systemMessage = 40099;
   static const jobRequest = 43001;
   static const jobAccepted = 43002;
@@ -70,8 +66,6 @@ abstract final class EventKind {
     40001, // legacy pre-migration stream messages
     streamMessageEdit, // 40003
     streamMessageDiff, // 40008
-    paymentRequest, // 40009 — payment request card
-    paymentReceipt, // 40010 — payment receipt overlay
     systemMessage, // 40099
     huddleStarted, // 48100 — visible huddle session row
     huddleParticipantJoined, // 48101 — huddle lifecycle metadata
@@ -85,7 +79,6 @@ abstract final class EventKind {
     reaction,
     nip29DeleteEvent,
     streamMessageEdit,
-    paymentReceipt, // 40010 — joined to its request by `#e`
   ];
 
   /// Visible content kinds requested by the NIP-CW channel-window path.
@@ -93,7 +86,6 @@ abstract final class EventKind {
     streamMessage,
     streamMessageV2,
     streamMessageDiff,
-    paymentRequest,
     systemMessage,
     jobRequest,
     jobAccepted,

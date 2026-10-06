@@ -269,39 +269,32 @@ echo "diff content" | buzz messages send-diff \
   --pr 42 | jq .
 ```
 
-### 6.4b Payments (NIP-LP)
+### 6.4b Payment receipts (Sonar `⚡PAY`)
 
-Buzz never pays; these commands only post and read the request/receipt
-events. Any 64-hex values work for a shape test — use a real wallet's
-invoice, payment hash and preimage for an end-to-end run.
+Buzz never pays; these commands post Sonar's chat receipt lines as ordinary
+messages. Use any 64-hex preimage for a shape test.
 
 ```bash
-HASH=66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925   # sha256(32 zero bytes)
 PREIMAGE=0000000000000000000000000000000000000000000000000000000000000000
+HASH=66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925   # sha256(32 zero bytes)
 
-# pay request — at least one of --bolt11/--bolt12/--lud16/--bip353
-PAY_REQ=$(buzz pay request --channel "$CHANNEL_ID" --sats 500 \
-  --bolt11 lnbc5u1pexample --payment-hash "$HASH" --memo lunch --expires-in 3600)
-PAY_ID=$(echo "$PAY_REQ" | jq -r '.event_id')
+# receipt: posts ⚡PAY|1|<id>|21 then ⚡PAYDONE|2|<id>|<preimage>
+buzz pay receipt --channel "$CHANNEL_ID" --sats 21 --preimage "$PREIMAGE" | jq .
+# Expected: {"pay_id":"<16 hex>","receipt":{"accepted":true,...},"done":{"accepted":true,...}}
 
-# pay list — joined with receipts, newest first, derived state per row
-buzz pay list --channel "$CHANNEL_ID" | jq '.[0] | {id, amount, state, targets}'
-# Expected: state "pending"
+# pending receipt, settled later
+PAY_ID=$(buzz pay receipt --channel "$CHANNEL_ID" --sats 500 --pending | jq -r .pay_id)
+buzz pay done --channel "$CHANNEL_ID" --id "$PAY_ID" | jq .
 
-# pay receipt — preimage must hash to the payment hash or the CLI refuses
-buzz pay receipt --channel "$CHANNEL_ID" --request "$PAY_ID" --sats 500 \
-  --payment-hash "$HASH" --preimage "$PREIMAGE" | jq .
+# the raw lines are plain kind:9 content
+buzz --format compact messages get --channel "$CHANNEL_ID" --limit 4 | jq -r '.[].content'
 
-# pay show — state becomes "verified" (bound hash + valid preimage)
-buzz pay show --request "$PAY_ID" | jq '{state, receipts: [.receipts[] | {status, verified}]}'
-
-# a failed attempt
-buzz pay receipt --channel "$CHANNEL_ID" --request "$PAY_ID" --sats 500 \
-  --failed --reason "no route" | jq .
-
-# pay verify — offline, exit 0 iff it matches
+# verify: offline, exit 0 iff sha256(preimage) == payment_hash
 buzz pay verify --preimage "$PREIMAGE" --payment-hash "$HASH" | jq .
 ```
+
+In Buzz Desktop the `⚡PAY` row renders as a gold bubble ("Paid · proof"), and
+the `⚡PAYDONE` row is hidden.
 
 ### 6.5 Reactions
 

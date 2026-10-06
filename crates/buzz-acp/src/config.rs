@@ -7,7 +7,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use buzz_core::kind::{
-    KIND_PAYMENT_RECEIPT, KIND_STREAM_MESSAGE, KIND_STREAM_MESSAGE_EDIT, KIND_STREAM_REMINDER,
+    KIND_STREAM_MESSAGE, KIND_STREAM_MESSAGE_EDIT, KIND_STREAM_REMINDER,
     KIND_WORKFLOW_APPROVAL_REQUESTED,
 };
 use clap::Parser;
@@ -1342,17 +1342,12 @@ pub fn load_rules(path: &std::path::Path) -> Result<Vec<SubscriptionRule>, Confi
 /// Message edits are included because Desktop emits `p` tags only for
 /// recipients newly added by an edit. Receiving kind 40003 therefore wakes an
 /// agent once for a newly added mention without re-waking it for ordinary edits.
-///
-/// Payment receipts (NIP-LP, kind 40010) `p`-tag the payee, so an agent that
-/// posted a payment request wakes when a payer reports the outcome and can
-/// confirm against its own wallet before acting.
 pub(crate) fn default_mention_kinds() -> Vec<u32> {
     vec![
         KIND_STREAM_MESSAGE,
         KIND_STREAM_MESSAGE_EDIT,
         KIND_WORKFLOW_APPROVAL_REQUESTED,
         KIND_STREAM_REMINDER,
-        KIND_PAYMENT_RECEIPT,
     ]
 }
 
@@ -1630,7 +1625,6 @@ mod tests {
             assert!(kinds.contains(&buzz_core::kind::KIND_STREAM_MESSAGE_EDIT));
             assert!(kinds.contains(&buzz_core::kind::KIND_WORKFLOW_APPROVAL_REQUESTED));
             assert!(kinds.contains(&buzz_core::kind::KIND_STREAM_REMINDER));
-            assert!(kinds.contains(&buzz_core::kind::KIND_PAYMENT_RECEIPT));
         }
     }
 
