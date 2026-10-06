@@ -120,6 +120,27 @@ final class BuzzPushNotificationResolverTests: XCTestCase {
     XCTAssertEqual(preview, String(repeating: "x", count: 177) + "…")
   }
 
+  func testDecodeResolutionSummarizesSonarReceiptsAndSkipsSettlementRows() {
+    // A `⚡PAYDONE`-only row is hidden in the timeline, so the newer
+    // settlement must not win over the receipt it settles, nor show raw.
+    let result = BuzzPushNotificationResolver.decodeResolution(
+      events: [
+        event(id: "receipt", content: "Paid the coffee.\n⚡PAY|1|g1|2100", createdAt: Self.now - 1),
+        event(id: "settlement", content: "⚡PAYDONE|2|g1", createdAt: Self.now),
+      ],
+      community: community()
+    )
+
+    XCTAssertEqual(result?.1.id, "receipt")
+    XCTAssertEqual(result?.0.body, "Paid the coffee. ⚡ 2,100 sats payment")
+    XCTAssertNil(
+      BuzzPushNotificationResolver.decodeResolution(
+        events: [event(content: "⚡PAYDONE|1|g1", kind: 40002)],
+        community: community()
+      )
+    )
+  }
+
   func testDecodeResolutionUsesLowestIDWhenCreatedAtTies() {
     let result = BuzzPushNotificationResolver.decodeResolution(
       events: [

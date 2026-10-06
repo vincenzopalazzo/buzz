@@ -29,7 +29,7 @@ class SonarPayBubble extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final amount = _formatSats(pay.sats);
+    final amount = formatSonarPaySats(pay.sats);
     final preimage = pay.preimage;
     return Semantics(
       container: true,
@@ -154,14 +154,4 @@ class SonarPayBubble extends ConsumerWidget {
       ),
     );
   }
-}
-
-String _formatSats(int sats) {
-  final digits = sats.toString();
-  final buffer = StringBuffer();
-  for (var i = 0; i < digits.length; i++) {
-    if (i > 0 && (digits.length - i) % 3 == 0) buffer.write(',');
-    buffer.write(digits[i]);
-  }
-  return buffer.toString();
 }

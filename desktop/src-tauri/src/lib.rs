@@ -44,6 +44,7 @@ mod relay_admission;
 mod reset;
 mod secret_store;
 mod shutdown;
+mod sonar_pay;
 mod team_catalog;
 mod templates;
 mod terminal_runtime;

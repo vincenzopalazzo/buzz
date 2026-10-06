@@ -20,6 +20,7 @@ void main() {
       int kind = EventKind.streamMessage,
       String? author,
       List<List<String>>? tags,
+      String content = 'hello',
     }) => NostrEvent(
       id: 'event-1',
       pubkey: author ?? alice,
@@ -31,7 +32,7 @@ void main() {
             ['h', 'dm-1'],
             ['p', self],
           ],
-      content: 'hello',
+      content: content,
       sig: 'sig',
     );
 
@@ -53,6 +54,22 @@ void main() {
             ['h', 'dm-1'],
           ],
         ),
+        self,
+      ),
+      isTrue,
+    );
+    // A Sonar settlement row is hidden in the timeline, so it never
+    // resurfaces a DM; a payment receipt still does.
+    expect(
+      isIncomingChannelMessageFromOther(
+        event(content: '⚡PAYDONE|2|pay-1'),
+        self,
+      ),
+      isFalse,
+    );
+    expect(
+      isIncomingChannelMessageFromOther(
+        event(content: 'Paid.\n⚡PAY|1|pay-1|21'),
         self,
       ),
       isTrue,

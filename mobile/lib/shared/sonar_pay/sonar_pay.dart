@@ -12,6 +12,8 @@ library;
 
 import 'package:flutter/foundation.dart';
 
+import '../relay/nostr_models.dart';
+
 @immutable
 sealed class SonarPayLine {
   const SonarPayLine(this.id);
@@ -131,6 +133,12 @@ bool isSonarPayControlLine(String content) {
       parsed.text.isEmpty;
 }
 
+/// A chat message (kind 9 or 40002) of only `⚡PAYDONE` lines: hidden in the
+/// timeline, so it must not notify, count as unread or show in feeds.
+bool isSonarPayControlEvent(int kind, String content) =>
+    (kind == EventKind.streamMessage || kind == EventKind.streamMessageV2) &&
+    isSonarPayControlLine(content);
+
 String _key(String pubkey, String id) => '${pubkey.toLowerCase()}:$id';
 
 /// Settlements keyed by signer and id. A `⚡PAYDONE` only settles a `⚡PAY`
@@ -196,4 +204,33 @@ SonarPayMessage? resolveSonarPayMessage(
         ),
     ],
   );
+}
+
+/// Sats with thousands separators, e.g. `2,100`.
+String formatSonarPaySats(int sats) {
+  final digits = sats.toString();
+  final buffer = StringBuffer();
+  for (var i = 0; i < digits.length; i++) {
+    if (i > 0 && (digits.length - i) % 3 == 0) buffer.write(',');
+    buffer.write(digits[i]);
+  }
+  return buffer.toString();
+}
+
+/// One-line text for previews (search, activity, reminders, notifications):
+/// receipt lines become "⚡ Paid 2,100 sats" or "⚡ 2,100 sats payment".
+/// Returns null for a hidden `⚡PAYDONE`-only control row, and [content]
+/// unchanged when it has no payment lines.
+String? sonarPayPreviewText(String content) {
+  final parsed = parseSonarPayContent(content);
+  if (parsed == null) return content;
+  if (parsed.pays.isEmpty) return parsed.text.isEmpty ? null : parsed.text;
+  final settled = {for (final done in parsed.dones) done.id};
+  return [
+    parsed.text,
+    for (final pay in parsed.pays)
+      settled.contains(pay.id)
+          ? '⚡ Paid ${formatSonarPaySats(pay.sats)} sats'
+          : '⚡ ${formatSonarPaySats(pay.sats)} sats payment',
+  ].where((part) => part.isNotEmpty).join(' ');
 }

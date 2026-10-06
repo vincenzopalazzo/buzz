@@ -9,6 +9,8 @@ import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 import '../../shared/mentions/agent_identity_provider.dart';
 import '../../shared/relay/relay.dart';
+import '../../shared/sonar_pay/sonar_pay.dart';
+import '../../shared/sonar_pay/sonar_pay_bubble.dart';
 import '../../shared/theme/theme.dart';
 import '../../shared/widgets/avatar_image.dart';
 import '../../shared/widgets/frosted_app_bar.dart';

@@ -104,9 +104,13 @@ pub async fn get_feed(
     }
 
     let mention_events = if want_mentions {
-        query_relay(&state, &[mention_filter])
+        let mut events = query_relay(&state, &[mention_filter])
             .await
-            .unwrap_or_default()
+            .unwrap_or_default();
+        events.retain(|event| {
+            !crate::sonar_pay::is_control_message(event.kind.as_u16(), &event.content)
+        });
+        events
     } else {
         Vec::new()
     };

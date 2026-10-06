@@ -94,7 +94,7 @@ Future<bool> _showNativeMessageActions({
             target: ReminderTarget(
               eventId: message.id,
               channelId: channelId,
-              preview: message.content.characters
+              preview: (sonarPayPreviewText(message.content) ?? '').characters
                   .take(_reminderPreviewLength)
                   .toString(),
               authorPubkey: message.pubkey,
@@ -180,7 +180,7 @@ Future<bool> _showNativeMessageActions({
           'width': anchorRect.width,
           'height': anchorRect.height,
           'dark': Theme.of(context).brightness == Brightness.dark,
-          'previewLabel': message.content,
+          'previewLabel': sonarPayPreviewText(message.content) ?? '',
           'previewBytes': previewBytes,
           'actions': actions,
           'reactions': [

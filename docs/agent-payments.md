@@ -67,8 +67,12 @@ mid-sentence, or on an indented line, stays text.
   the other person's receipt because its chats are one-to-one; in a Buzz
   channel the viewer is rarely the payee.
 - **Hidden rows.** A message containing only `⚡PAYDONE` lines is a hidden
-  control row. It never appears in the timeline, and on desktop it raises no
-  unread count or notification when it arrives live.
+  control row. It never appears in the timeline, search, the home feed or
+  activity, and it raises no unread count or notification: live, in the
+  desktop's native catch-up when the app opens, on mobile, or in an iOS push.
+- **Previews.** Anywhere a message is shown as one line (search, inbox,
+  notifications, push, reminders, link previews, the reply banner), receipt
+  lines read "⚡ Paid 2,100 sats" or "⚡ 2,100 sats payment".
 - **Settlement.** A `⚡PAYDONE` settles the `⚡PAY` with the same id. It can
   arrive in the same message, a later one, or an earlier one; the timeline
   folds the whole conversation.
@@ -85,11 +89,27 @@ mid-sentence, or on an indented line, stays text.
 
 Implementation:
 
-- desktop: `desktop/src/features/messages/lib/sonarPay.ts`,
-  `formatTimelineMessages.ts`, `ui/SonarPayBubble.tsx`, and
-  `features/channels/useLiveChannelUpdates.ts`
+- desktop: `desktop/src/features/messages/lib/sonarPay.ts` (decoder and
+  `sonarPayPreviewText`), `formatTimelineMessages.ts`, `ui/SonarPayBubble.tsx`,
+  `features/channels/useLiveChannelUpdates.ts`, and
+  `src/shared/lib/remarkBip353.ts`, which keeps a `₿alice@example.com`
+  BIP-353 name from becoming a `mailto:` link
+- desktop native: `desktop/src-tauri/src/sonar_pay.rs`, used by the unread
+  catch-up and the home feed's mentions
 - mobile: `mobile/lib/shared/sonar_pay/`, `features/channels/timeline_message.dart`,
-  and `channel_detail_page/message_bubble.dart`
+  the channel and thread message views, notifications, activity and search
+- iOS push: `mobile/ios/BuzzPushKit/Sources/BuzzPushKit/SonarPayPreview.swift`
+
+## Payment rails
+
+The receipt does not care how the payment was made. A BOLT11 invoice, a
+BOLT12 offer, and a BIP-353 name (`₿alice@example.com`, a DNS name that
+resolves to a BOLT12 offer) all settle to the same two lines. Whether a rail
+works depends on the wallet MCP: lexe-mcp pays BOLT11 and BOLT12 today, and
+refuses `user@domain` names it cannot resolve. Buzz only needs to render what
+the agent writes. Long invoices and offers wrap inside the message, and a
+BIP-353 name written with its `₿` prefix stays plain text on desktop and
+mobile.
 
 ## Why this shape
 
@@ -111,12 +131,12 @@ any wallet works without Buzz shipping or reviewing wallet code.
 
 ## Known gaps
 
-- On desktop, the unread count rebuilt natively when the app opens still
-  counts a `⚡PAYDONE`-only message. Messages arriving live are filtered.
-- Sidebar, search and notification previews show the raw receipt lines.
 - A bubble is the payer's claim. The payee should confirm in their own wallet
   before acting on it.
 - The agent model writes the lines from the wallet result, so a model can
   get them wrong. A malformed line then shows as plain text, never as a
   bubble. A wallet MCP that returns the two lines ready to paste would remove
   that step.
+- Previews and the native filters look at a message's own content. An edit
+  that turns a message into a `⚡PAYDONE`-only row is hidden in the timeline,
+  but its original text can still show in search or a stale notification.

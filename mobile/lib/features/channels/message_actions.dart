@@ -18,6 +18,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../shared/clipboard_utils.dart';
 import '../../shared/deeplink/deep_link.dart';
 import '../../shared/relay/relay.dart';
+import '../../shared/sonar_pay/sonar_pay.dart';
 import '../../shared/theme/theme.dart';
 import '../../shared/custom_emoji/custom_emoji.dart';
 import '../../shared/custom_emoji/custom_emoji_provider.dart';
@@ -696,7 +697,7 @@ class _FastActionsRow extends ConsumerWidget {
               target: ReminderTarget(
                 eventId: message.id,
                 channelId: channelId,
-                preview: message.content.characters
+                preview: (sonarPayPreviewText(message.content) ?? '').characters
                     .take(_reminderPreviewLength)
                     .toString(),
                 authorPubkey: message.pubkey,
