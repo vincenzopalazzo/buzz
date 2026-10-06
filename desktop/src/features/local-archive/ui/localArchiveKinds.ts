@@ -6,6 +6,7 @@ import {
   KIND_HUDDLE_PARTICIPANT_JOINED,
   KIND_HUDDLE_PARTICIPANT_LEFT,
   KIND_HUDDLE_STARTED,
+  KIND_PAYMENT_REQUEST,
   KIND_STREAM_MESSAGE_DIFF,
   KIND_SYSTEM_MESSAGE,
 } from "@/shared/constants/kinds";
@@ -32,6 +33,10 @@ export const KIND_GROUPS: ReadonlyArray<KindGroup> = [
         label: kindLabel(k),
       })),
       { kind: KIND_STREAM_MESSAGE_DIFF, label: "Message diffs (kind 40008)" },
+      {
+        kind: KIND_PAYMENT_REQUEST,
+        label: "Payment requests (kind 40009)",
+      },
     ],
   },
   {
@@ -73,6 +78,8 @@ function kindLabel(kind: number): string {
       return "Stream messages v2 (kind 40002)";
     case 40003:
       return "Message edits (kind 40003)";
+    case 40010:
+      return "Payment receipts (kind 40010)";
     case 45001:
       return "Forum posts (kind 45001)";
     case 45003:

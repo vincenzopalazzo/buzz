@@ -34,8 +34,14 @@ import {
   KIND_STREAM_MESSAGE_V2,
   KIND_STREAM_MESSAGE_EDIT,
   KIND_STREAM_MESSAGE_DIFF,
+  KIND_PAYMENT_RECEIPT,
+  KIND_PAYMENT_REQUEST,
   KIND_SYSTEM_MESSAGE,
 } from "@/shared/constants/kinds";
+import {
+  type PaymentReceiptSummary,
+  parsePaymentReceiptTags,
+} from "@/features/messages/lib/payment";
 import { resolveEventAuthorPubkey } from "@/shared/lib/authors";
 import { normalizePubkey } from "@/shared/lib/pubkey";
 import { channelRoleMap } from "@/shared/lib/rosterDerivations";
@@ -54,6 +60,7 @@ export function isTimelineContentEvent(event: RelayEvent) {
     event.kind === KIND_STREAM_MESSAGE ||
     event.kind === KIND_STREAM_MESSAGE_V2 ||
     event.kind === KIND_STREAM_MESSAGE_DIFF ||
+    event.kind === KIND_PAYMENT_REQUEST ||
     event.kind === KIND_SYSTEM_MESSAGE ||
     event.kind === KIND_JOB_REQUEST ||
     event.kind === KIND_JOB_ACCEPTED ||
@@ -398,6 +405,40 @@ export function formatTimelineMessages(
     reactionsByEventId.set(targetId, current);
   }
 
+  // NIP-LP receipts (kind 40010) overlay their payment request row, joined
+  // by the bare `e` tag. Order-independent: a receipt that arrives before
+  // its request simply waits in this map until the request renders.
+  const paymentReceiptsByRequestId = new Map<string, PaymentReceiptSummary[]>();
+  for (const event of events) {
+    if (event.kind !== KIND_PAYMENT_RECEIPT || deletedEventIds.has(event.id)) {
+      continue;
+    }
+    const parsed = parsePaymentReceiptTags(event.tags);
+    if (!parsed || deletedEventIds.has(parsed.requestId)) {
+      continue;
+    }
+    const payerPubkey = event.pubkey.toLowerCase();
+    const profile = profiles?.[payerPubkey];
+    const payerDisplayName =
+      currentPubkeyLower && payerPubkey === currentPubkeyLower
+        ? "You"
+        : profile?.displayName?.trim() ||
+          profile?.nip05Handle?.trim() ||
+          truncateNpub(payerPubkey);
+    const list = paymentReceiptsByRequestId.get(parsed.requestId) ?? [];
+    list.push({
+      ...parsed,
+      id: event.id,
+      payerPubkey,
+      payerDisplayName,
+      createdAt: event.created_at,
+    });
+    paymentReceiptsByRequestId.set(parsed.requestId, list);
+  }
+  for (const list of paymentReceiptsByRequestId.values()) {
+    list.sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id));
+  }
+
   const authorPubkeyByEventId = new Map<string, string>();
   const authorLabelByEventId = new Map<string, string>();
   const depthByEventId = new Map<string, number>();
@@ -540,6 +581,10 @@ export function formatTimelineMessages(
           )
           .map(({ earliestCreatedAt: _drop, ...pill }) => pill);
       })(),
+      paymentReceipts:
+        event.kind === KIND_PAYMENT_REQUEST
+          ? paymentReceiptsByRequestId.get(event.id)
+          : undefined,
     };
   });
 }
@@ -583,6 +628,14 @@ export function collectReactionActorPubkeys(
 
   const pubkeys = new Set<string>();
   for (const event of events) {
+    if (
+      event.kind === KIND_PAYMENT_RECEIPT &&
+      !deletedEventIds.has(event.id.toLowerCase())
+    ) {
+      // Receipt payers render by name on the request card.
+      pubkeys.add(event.pubkey.toLowerCase());
+      continue;
+    }
     if (
       event.kind !== KIND_REACTION ||
       deletedEventIds.has(event.id.toLowerCase())

@@ -1,3 +1,4 @@
+import type { PaymentReceiptSummary } from "@/features/messages/lib/payment";
 export type TimelineReaction = {
   emoji: string;
   /** Custom (image) emoji URL from the reaction's NIP-30 `emoji` tag, if any. */
@@ -49,4 +50,6 @@ export type TimelineMessage = {
   kind?: number;
   tags?: string[][];
   reactions?: TimelineReaction[];
+  /** NIP-LP receipts joined to a kind-40009 payment request row. */
+  paymentReceipts?: PaymentReceiptSummary[];
 };

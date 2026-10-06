@@ -8,6 +8,7 @@ import { relayClient } from "@/shared/api/relayClient";
 import type { Channel, RelayEvent } from "@/shared/api/types";
 import {
   KIND_STREAM_MESSAGE,
+  KIND_PAYMENT_REQUEST,
   KIND_STREAM_MESSAGE_DIFF,
   KIND_TYPING_INDICATOR,
 } from "@/shared/constants/kinds";
@@ -53,7 +54,8 @@ function isTypingCompletionEvent(event: RelayEvent | null | undefined) {
 
   return (
     event.kind === KIND_STREAM_MESSAGE ||
-    event.kind === KIND_STREAM_MESSAGE_DIFF
+    event.kind === KIND_STREAM_MESSAGE_DIFF ||
+    event.kind === KIND_PAYMENT_REQUEST
   );
 }
 

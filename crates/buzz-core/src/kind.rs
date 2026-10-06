@@ -493,6 +493,20 @@ pub const KIND_STREAM_MESSAGE_SCHEDULED: u32 = 40006;
 pub const KIND_STREAM_REMINDER: u32 = 40007;
 /// A diff/patch message showing file changes (unified diff format).
 pub const KIND_STREAM_MESSAGE_DIFF: u32 = 40008;
+/// NIP-LP Lightning payment request card ("pay N sats"), regular + `h`-scoped.
+///
+/// Tags: `amount` (msat), `p` (payee), at least one of `bolt11` / `bolt12` /
+/// `lud16` / `bip353`, optional `payment_hash`, `memo`, `expiry` (unix
+/// seconds — deliberately never NIP-40 `expiration`). Shape is validated by
+/// `buzz_core::payment::PaymentRequest`.
+pub const KIND_PAYMENT_REQUEST: u32 = 40009;
+/// NIP-LP Lightning payment receipt: the payer's reported outcome for a
+/// request, referenced by a bare `e` tag (no NIP-10 markers).
+///
+/// Carries `status` (`paid` / `failed`), `amount`, `payment_hash`, optional
+/// `preimage`, `fee`, `reason`. A receipt is a claim; clients upgrade it to
+/// "verified" only when the preimage matches the request's own hash.
+pub const KIND_PAYMENT_RECEIPT: u32 = 40010;
 /// Canvas (shared document) for a channel.
 pub const KIND_CANVAS: u32 = 40100;
 /// System message for channel state changes (join, leave, rename, etc.).
@@ -716,6 +730,8 @@ pub const ALL_KINDS: &[u32] = &[
     KIND_STREAM_MESSAGE_SCHEDULED,
     KIND_STREAM_REMINDER,
     KIND_STREAM_MESSAGE_DIFF,
+    KIND_PAYMENT_REQUEST,
+    KIND_PAYMENT_RECEIPT,
     KIND_CANVAS,
     KIND_SYSTEM_MESSAGE,
     KIND_CHANNEL_SUMMARY,

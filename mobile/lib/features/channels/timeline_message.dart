@@ -501,7 +501,10 @@ List<TimelineMessage> formatTimeline(
 
     if (event.kind == EventKind.streamMessage ||
         event.kind == EventKind.streamMessageV2 ||
-        event.kind == EventKind.streamMessageDiff) {
+        event.kind == EventKind.streamMessageDiff ||
+        // NIP-LP: the request's content is a plain-text fallback
+        // ("⚡ Payment request: 500 sats — lunch") until mobile grows a card.
+        event.kind == EventKind.paymentRequest) {
       final edit = edits[event.id];
       final effectiveTags = edit?.tags ?? event.tags;
       // Include both notify (`p`) and reference-only (`mention`) tags —

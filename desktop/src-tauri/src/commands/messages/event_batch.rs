@@ -8,7 +8,7 @@ use crate::{app_state::AppState, relay::query_relay};
 // chunks so a large workflow list cannot silently lose late presentations.
 const EVENT_QUERY_CHUNK_SIZE: usize = 1_000;
 
-const GET_EVENT_KINDS: [u32; 15] = [
+const GET_EVENT_KINDS: [u32; 17] = [
     0,
     1,
     3,
@@ -19,6 +19,8 @@ const GET_EVENT_KINDS: [u32; 15] = [
     40002,
     40003,
     40008,
+    40009,
+    40010,
     40099,
     40100,
     45001,
