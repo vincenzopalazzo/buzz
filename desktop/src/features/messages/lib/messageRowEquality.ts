@@ -69,6 +69,35 @@ export function reactionsEqual(
   return true;
 }
 
+/**
+ * NIP-LP receipts joined to a payment request row. Rebuilt per
+ * `formatTimelineMessages` run like `reactions`; compare the fields the card
+ * renders so a receipt arriving after its request re-renders the row once.
+ */
+export function paymentReceiptsEqual(
+  a: TimelineMessage["paymentReceipts"],
+  b: TimelineMessage["paymentReceipts"],
+): boolean {
+  if (a === b) return true;
+  if (!a || !b || a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    const left = a[i];
+    const right = b[i];
+    if (
+      left.id !== right.id ||
+      left.status !== right.status ||
+      left.amountMsat !== right.amountMsat ||
+      left.paymentHash !== right.paymentHash ||
+      left.preimage !== right.preimage ||
+      left.reason !== right.reason ||
+      left.payerDisplayName !== right.payerDisplayName
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
 export function numberArrayEqual(
   a: readonly number[] | undefined,
   b: readonly number[] | undefined,

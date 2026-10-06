@@ -5590,6 +5590,7 @@ const TIMELINE_KINDS = new Set([
   9,
   40002,
   40008,
+  40009,
   40099,
   43001,
   43002,
@@ -5868,8 +5869,8 @@ async function handleGetChannelReconnectRepair(
   config: E2eConfig | undefined,
 ): Promise<RelayEvent[]> {
   const kinds = new Set([
-    5, 7, 9, 9005, 40001, 40002, 40003, 40008, 40099, 45001, 45003, 48100,
-    48101, 48102, 48103,
+    5, 7, 9, 9005, 40001, 40002, 40003, 40008, 40009, 40010, 40099, 45001,
+    45003, 48100, 48101, 48102, 48103,
   ]);
   const filter: Record<string, unknown> = {
     "#h": [args.channelId],

@@ -27,14 +27,14 @@ use buzz_core::kind::{
     KIND_NIP29_CREATE_GROUP, KIND_NIP29_DELETE_EVENT, KIND_NIP29_DELETE_GROUP,
     KIND_NIP29_EDIT_METADATA, KIND_NIP29_JOIN_REQUEST, KIND_NIP29_LEAVE_REQUEST,
     KIND_NIP29_PUT_USER, KIND_NIP29_REMOVE_USER, KIND_NIP43_LEAVE_REQUEST,
-    KIND_NIP65_RELAY_LIST_METADATA, KIND_PERSONA, KIND_PIN_LIST, KIND_PRESENCE_UPDATE,
-    KIND_PRIVATE_MANAGED_AGENT, KIND_PRODUCT_FEEDBACK, KIND_PROFILE, KIND_PROJECT, KIND_REACTION,
-    KIND_READ_STATE, KIND_REPORT, KIND_STREAM_MESSAGE, KIND_STREAM_MESSAGE_BOOKMARKED,
-    KIND_STREAM_MESSAGE_DIFF, KIND_STREAM_MESSAGE_EDIT, KIND_STREAM_MESSAGE_PINNED,
-    KIND_STREAM_MESSAGE_SCHEDULED, KIND_STREAM_MESSAGE_V2, KIND_STREAM_REMINDER, KIND_TEAM,
-    KIND_TEAM_CATALOG, KIND_TEXT_NOTE, KIND_USER_STATUS, KIND_WORKFLOW_DEF, KIND_WORKFLOW_TRIGGER,
-    RELAY_ADMIN_ADD_MEMBER, RELAY_ADMIN_CHANGE_ROLE, RELAY_ADMIN_REMOVE_MEMBER,
-    RELAY_ADMIN_SET_WORKSPACE_PROFILE,
+    KIND_NIP65_RELAY_LIST_METADATA, KIND_PAYMENT_RECEIPT, KIND_PAYMENT_REQUEST, KIND_PERSONA,
+    KIND_PIN_LIST, KIND_PRESENCE_UPDATE, KIND_PRIVATE_MANAGED_AGENT, KIND_PRODUCT_FEEDBACK,
+    KIND_PROFILE, KIND_PROJECT, KIND_REACTION, KIND_READ_STATE, KIND_REPORT, KIND_STREAM_MESSAGE,
+    KIND_STREAM_MESSAGE_BOOKMARKED, KIND_STREAM_MESSAGE_DIFF, KIND_STREAM_MESSAGE_EDIT,
+    KIND_STREAM_MESSAGE_PINNED, KIND_STREAM_MESSAGE_SCHEDULED, KIND_STREAM_MESSAGE_V2,
+    KIND_STREAM_REMINDER, KIND_TEAM, KIND_TEAM_CATALOG, KIND_TEXT_NOTE, KIND_USER_STATUS,
+    KIND_WORKFLOW_DEF, KIND_WORKFLOW_TRIGGER, RELAY_ADMIN_ADD_MEMBER, RELAY_ADMIN_CHANGE_ROLE,
+    RELAY_ADMIN_REMOVE_MEMBER, RELAY_ADMIN_SET_WORKSPACE_PROFILE,
 };
 use buzz_core::tenant::TenantContext;
 use buzz_core::verification::verify_event;
@@ -541,6 +541,8 @@ fn required_scope_for_kind(kind: u32, event: &Event) -> Result<Scope, &'static s
         | KIND_STREAM_MESSAGE_SCHEDULED
         | KIND_STREAM_REMINDER
         | KIND_STREAM_MESSAGE_DIFF
+        | KIND_PAYMENT_REQUEST
+        | KIND_PAYMENT_RECEIPT
         | KIND_FORUM_POST
         | KIND_FORUM_VOTE
         | KIND_FORUM_COMMENT => Ok(Scope::MessagesWrite),
@@ -777,6 +779,8 @@ pub(crate) fn requires_h_channel_scope(kind: u32) -> bool {
             | KIND_STREAM_MESSAGE_SCHEDULED
             | KIND_STREAM_REMINDER
             | KIND_STREAM_MESSAGE_DIFF
+            | KIND_PAYMENT_REQUEST
+            | KIND_PAYMENT_RECEIPT
             | KIND_CANVAS
             | KIND_FORUM_POST
             | KIND_FORUM_VOTE
@@ -1383,6 +1387,51 @@ async fn validate_forum_vote_target(
         _ => {}
     }
     Ok(())
+}
+
+/// Validate NIP-LP payment events (kinds 40009/40010) at ingest.
+///
+/// The relay has no payment logic: it only checks the tag shape so clients
+/// never have to render malformed cards, and it never interprets the
+/// invoice, offer, or preimage. Settlement truth stays in each party's own
+/// wallet. The `h` tag is validated upstream like every channel kind; a
+/// receipt's `e` tag MUST be bare so it never enters the NIP-10 thread
+/// machinery and inflates the request's reply counters.
+fn validate_payment_event(event: &Event) -> Result<(), String> {
+    let kind = event_kind_u32(event);
+    let tags: Vec<Vec<String>> = event.tags.iter().map(|t| t.clone().to_vec()).collect();
+    if tags.len() > 64 {
+        return Err("payment event has too many tags".into());
+    }
+    if event.content.len() > 4096 {
+        return Err("payment event content too long".into());
+    }
+    if kind == KIND_PAYMENT_REQUEST {
+        let req = buzz_core::payment::PaymentRequest::from_tags(&tags)
+            .map_err(|e| format!("payment request: {e}"))?;
+        if req.channel_id != channel_id_hint(event).unwrap_or_default() {
+            return Err("payment request h tag mismatch".into());
+        }
+        for t in &req.targets {
+            if t.value().len() > 4096 {
+                return Err(format!("payment target too long: {}", t.tag_name()));
+            }
+        }
+        Ok(())
+    } else {
+        buzz_core::payment::PaymentReceipt::from_tags(&tags)
+            .map_err(|e| format!("payment receipt: {e}"))?;
+        Ok(())
+    }
+}
+
+fn channel_id_hint(event: &Event) -> Option<String> {
+    event
+        .tags
+        .iter()
+        .map(|t| t.clone().to_vec())
+        .find(|t| t.first().map(String::as_str) == Some("h"))
+        .and_then(|t| t.get(1).cloned())
 }
 
 /// Validate kind:40008 diff event metadata tags.
@@ -2937,6 +2986,11 @@ async fn ingest_event_inner(
         validate_diff_event(&event).map_err(|e| IngestError::Rejected(format!("invalid: {e}")))?;
     }
 
+    if kind_u32 == KIND_PAYMENT_REQUEST || kind_u32 == KIND_PAYMENT_RECEIPT {
+        validate_payment_event(&event)
+            .map_err(|e| IngestError::Rejected(format!("invalid: {e}")))?;
+    }
+
     if kind_u32 == KIND_AGENT_ENGRAM {
         validate_engram_envelope(&event)
             .map_err(|e| IngestError::Rejected(format!("invalid: {e}")))?;
@@ -3957,10 +4011,79 @@ mod postgres_tests {
     }
 
     #[test]
+    fn payment_kinds_require_messages_write_and_h_scope() {
+        let dummy = make_dummy_event();
+        for kind in [KIND_PAYMENT_REQUEST, KIND_PAYMENT_RECEIPT] {
+            assert_eq!(
+                required_scope_for_kind(kind, &dummy).unwrap(),
+                Scope::MessagesWrite,
+                "kind {kind} should require MessagesWrite scope"
+            );
+            assert!(
+                requires_h_channel_scope(kind),
+                "kind {kind} should require an h-tag channel scope"
+            );
+        }
+    }
+
+    #[test]
+    fn payment_validation_checks_shape_only() {
+        let channel = "9b353519-f4fe-4757-aef4-bec6cc0ae54c";
+        let payee = "abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234";
+        let ok = make_event_with_tags(
+            KIND_PAYMENT_REQUEST,
+            "⚡ Payment request: 5 sats",
+            &[
+                &["h", channel],
+                &["p", payee],
+                &["amount", "5000"],
+                &["bolt12", "lno1example"],
+            ],
+        );
+        assert!(validate_payment_event(&ok).is_ok());
+
+        let no_target = make_event_with_tags(
+            KIND_PAYMENT_REQUEST,
+            "",
+            &[&["h", channel], &["p", payee], &["amount", "5000"]],
+        );
+        assert!(validate_payment_event(&no_target).is_err());
+
+        let request_id = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        let hash = "66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925";
+        let receipt = make_event_with_tags(
+            KIND_PAYMENT_RECEIPT,
+            "⚡ Paid 5 sats",
+            &[
+                &["h", channel],
+                &["e", request_id],
+                &["amount", "5000"],
+                &["payment_hash", hash],
+            ],
+        );
+        assert!(validate_payment_event(&receipt).is_ok());
+
+        // A marked e tag would enter the NIP-10 thread machinery.
+        let threaded = make_event_with_tags(
+            KIND_PAYMENT_RECEIPT,
+            "",
+            &[
+                &["h", channel],
+                &["e", request_id, "", "reply"],
+                &["amount", "5000"],
+                &["payment_hash", hash],
+            ],
+        );
+        assert!(validate_payment_event(&threaded).is_err());
+    }
+
+    #[test]
     fn channel_scoped_content_kinds_require_h_tags() {
         for kind in [
             KIND_STREAM_MESSAGE,
             KIND_STREAM_MESSAGE_DIFF,
+            KIND_PAYMENT_REQUEST,
+            KIND_PAYMENT_RECEIPT,
             KIND_CANVAS,
             KIND_FORUM_POST,
             KIND_FORUM_VOTE,

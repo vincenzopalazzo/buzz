@@ -269,6 +269,40 @@ echo "diff content" | buzz messages send-diff \
   --pr 42 | jq .
 ```
 
+### 6.4b Payments (NIP-LP)
+
+Buzz never pays; these commands only post and read the request/receipt
+events. Any 64-hex values work for a shape test — use a real wallet's
+invoice, payment hash and preimage for an end-to-end run.
+
+```bash
+HASH=66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925   # sha256(32 zero bytes)
+PREIMAGE=0000000000000000000000000000000000000000000000000000000000000000
+
+# pay request — at least one of --bolt11/--bolt12/--lud16/--bip353
+PAY_REQ=$(buzz pay request --channel "$CHANNEL_ID" --sats 500 \
+  --bolt11 lnbc5u1pexample --payment-hash "$HASH" --memo lunch --expires-in 3600)
+PAY_ID=$(echo "$PAY_REQ" | jq -r '.event_id')
+
+# pay list — joined with receipts, newest first, derived state per row
+buzz pay list --channel "$CHANNEL_ID" | jq '.[0] | {id, amount, state, targets}'
+# Expected: state "pending"
+
+# pay receipt — preimage must hash to the payment hash or the CLI refuses
+buzz pay receipt --channel "$CHANNEL_ID" --request "$PAY_ID" --sats 500 \
+  --payment-hash "$HASH" --preimage "$PREIMAGE" | jq .
+
+# pay show — state becomes "verified" (bound hash + valid preimage)
+buzz pay show --request "$PAY_ID" | jq '{state, receipts: [.receipts[] | {status, verified}]}'
+
+# a failed attempt
+buzz pay receipt --channel "$CHANNEL_ID" --request "$PAY_ID" --sats 500 \
+  --failed --reason "no route" | jq .
+
+# pay verify — offline, exit 0 iff it matches
+buzz pay verify --preimage "$PREIMAGE" --payment-hash "$HASH" | jq .
+```
+
 ### 6.5 Reactions
 
 ```bash

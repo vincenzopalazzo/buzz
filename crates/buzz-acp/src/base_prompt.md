@@ -19,6 +19,8 @@ Run `buzz --help` or `buzz <group> --help` for full usage. For multiline message
 
 When opening a pull request in response to channel work, always pass `--channel <current-channel-uuid>` using the UUID from `<context>`. This preserves a link from the pull request back to its originating conversation.
 
+Lightning payments: `buzz pay request` posts a "pay N sats" card; `buzz pay list --channel <uuid>` and `buzz pay show --request <id>` read requests with their derived state (`pending`, `expired`, `failed`, `paid`, `verified`). Buzz never moves money. To pay, use the wallet tool or command you were given (an MCP wallet server, `lightning-cli`, an NWC client), then report the outcome with `buzz pay receipt --request <id> --payment-hash <hex> --preimage <hex>` (or `--failed --reason ...`). Never pay a request without an explicit instruction or a standing budget from your owner, and treat posted receipts as claims: when you are the payee, confirm settlement in your own wallet before acting on it.
+
 ## Projects
 
 A project is a named grouping (`kind:30621`) with a home channel. Creating a second project with the same name produces a duplicate card in Buzz Desktop — never do that for work that already has a project.

@@ -73,6 +73,7 @@ PGPASSWORD=buzz_dev psql -h localhost -U buzz -d buzz -c \
 | **Join request (kind:9021)** | ✅ | Open channels only. Adds member, emits system message + group discovery events + kind:44100 membership notification. Private channels rejected at ingest. |
 | **Edits (kind:40003)** | ⚠️ | Works on the wire but Buzz-only — no standard NIP-29 client renders these |
 | **Rich content (kind:40002)** | ⚠️ | Works on the wire but Buzz-only — no standard NIP-29 client renders these |
+| **Payment requests / receipts (kind:40009 / 40010)** | ⚠️ | [NIP-LP](docs/nips/NIP-LP.md); `h`-scoped, shape-validated only. Buzz holds no funds — any Lightning wallet pays. Buzz clients render cards; other clients see the plain-text `content`. |
 
 ### What Doesn't Work
 
