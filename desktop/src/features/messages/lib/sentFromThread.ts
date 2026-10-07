@@ -1,3 +1,4 @@
+import { sonarPayPreviewText } from "./sonarPay.ts";
 export const SENT_FROM_THREAD_TAG = "buzz:sent-from-thread";
 const THREAD_ROOT_EXCERPT_MAX_LENGTH = 64;
 
@@ -6,7 +7,9 @@ export type SentFromThreadReference = {
   rootExcerpt: string | null;
 };
 
-export function summarizeThreadRoot(content: string): string | null {
+export function summarizeThreadRoot(rawContent: string): string | null {
+  // Sonar receipt lines read as "⚡ Paid 21 sats", never as raw wire text.
+  const content = sonarPayPreviewText(rawContent) ?? "";
   const withoutControls = Array.from(content, (character) => {
     const codePoint = character.codePointAt(0) ?? 0;
     return codePoint <= 0x1f || (codePoint >= 0x7f && codePoint <= 0x9f)

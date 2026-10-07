@@ -5672,6 +5672,22 @@ mod agent_draft_prompt_tests {
         assert!(!prompt.contains("`[Context]`"));
     }
 
+    /// The receipt template must stay byte-compatible with the Sonar lines the
+    /// desktop and mobile timelines decode (`sonarPay.ts`, `sonar_pay.dart`).
+    #[test]
+    fn shared_base_prompt_teaches_sonar_payment_receipts() {
+        let prompt = include_str!("base_prompt.md");
+        assert!(prompt.contains("### Payment Receipts"));
+        assert!(prompt.contains("\n⚡PAY|1|<id>|<sats>\n⚡PAYDONE|2|<id>|<preimage>\n"));
+        assert!(prompt.contains("each on its own line, outside any code block"));
+        assert!(prompt.contains("Pending or unknown outcome: write no receipt lines"));
+        assert!(prompt.contains("never pay without an explicit request"));
+        // Every rail Buzz renders: BOLT11, BOLT12, and BIP-353 names that the
+        // markdown renderer keeps out of mailto links via the `₿` prefix.
+        assert!(prompt.contains("a BOLT11 invoice, a BOLT12 offer, or a BIP-353 name"));
+        assert!(prompt.contains("Write a BIP-353 name with its `₿` prefix"));
+    }
+
     #[test]
     fn shared_base_prompt_teaches_real_newlines_for_multiline_messages() {
         let prompt = include_str!("base_prompt.md");

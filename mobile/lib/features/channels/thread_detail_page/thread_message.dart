@@ -238,68 +238,90 @@ class _ThreadMessage extends HookConsumerWidget {
                                       ],
                                     ),
                                   ),
-                                MessageContent(
-                                  content: message.content,
-                                  mentionNames: resolvedMentionNames,
-                                  mentionLabels: mentionLabels,
-                                  agentMentionPubkeys: agentMentionPubkeys,
-                                  channelNames: channelNames,
-                                  tags: message.tags,
-                                  baseStyle: messageBodyTextStyle.copyWith(
-                                    color: context.colors.onSurface,
-                                  ),
-                                  scaleEmojiOnly: true,
-                                  mediaCarouselTrailingOverflow: Grid.gutter,
-                                  onMediaReply: allMessages == null
-                                      ? null
-                                      : () {
-                                          if (!context.mounted) return;
-                                          Navigator.of(context).push(
-                                            MaterialPageRoute<void>(
-                                              builder: (_) => ThreadDetailPage(
-                                                threadHead: message,
-                                                allMessages: allMessages!,
-                                                channelId: channelId,
-                                                currentPubkey: currentPubkey,
-                                                isMember: isMember,
-                                                isArchived: isArchived,
+                                // Sonar receipts: the text without its payment lines, then
+                                // one bubble per `⚡PAY` line.
+                                if (message.sonarPay?.text.isNotEmpty ?? true)
+                                  MessageContent(
+                                    content:
+                                        message.sonarPay?.text ??
+                                        message.content,
+                                    mentionNames: resolvedMentionNames,
+                                    mentionLabels: mentionLabels,
+                                    agentMentionPubkeys: agentMentionPubkeys,
+                                    channelNames: channelNames,
+                                    tags: message.tags,
+                                    baseStyle: messageBodyTextStyle.copyWith(
+                                      color: context.colors.onSurface,
+                                    ),
+                                    scaleEmojiOnly: true,
+                                    mediaCarouselTrailingOverflow: Grid.gutter,
+                                    onMediaReply: allMessages == null
+                                        ? null
+                                        : () {
+                                            if (!context.mounted) return;
+                                            Navigator.of(context).push(
+                                              MaterialPageRoute<void>(
+                                                builder: (_) =>
+                                                    ThreadDetailPage(
+                                                      threadHead: message,
+                                                      allMessages: allMessages!,
+                                                      channelId: channelId,
+                                                      currentPubkey:
+                                                          currentPubkey,
+                                                      isMember: isMember,
+                                                      isArchived: isArchived,
+                                                    ),
                                               ),
-                                            ),
-                                          );
-                                        },
-                                  onMediaMore: (viewerContext, imageUrl) =>
-                                      showImageActions(
-                                        context: viewerContext,
-                                        ref: ref,
-                                        message: message,
-                                        channelId: channelId,
-                                        imageUrl: imageUrl,
-                                        canManageMessage: canManageMessage,
-                                        onDeleted: () {
-                                          if (viewerContext.mounted) {
-                                            Navigator.of(
-                                              viewerContext,
-                                            ).maybePop();
-                                          }
-                                        },
-                                      ),
-                                  onChannelTap: (targetChannelId) {
-                                    openChannelLink(
-                                      context: context,
-                                      ref: ref,
-                                      channelId: targetChannelId,
-                                      currentChannelId: channelId,
-                                    );
-                                  },
-                                  onMentionTap: (pubkey) =>
-                                      showUserProfileSheet(
-                                        context,
-                                        pubkey,
-                                        names: channelIdentityNamesProvider(
-                                          channelId,
+                                            );
+                                          },
+                                    onMediaMore: (viewerContext, imageUrl) =>
+                                        showImageActions(
+                                          context: viewerContext,
+                                          ref: ref,
+                                          message: message,
+                                          channelId: channelId,
+                                          imageUrl: imageUrl,
+                                          canManageMessage: canManageMessage,
+                                          onDeleted: () {
+                                            if (viewerContext.mounted) {
+                                              Navigator.of(
+                                                viewerContext,
+                                              ).maybePop();
+                                            }
+                                          },
                                         ),
-                                      ),
-                                ),
+                                    onChannelTap: (targetChannelId) {
+                                      openChannelLink(
+                                        context: context,
+                                        ref: ref,
+                                        channelId: targetChannelId,
+                                        currentChannelId: channelId,
+                                      );
+                                    },
+                                    onMentionTap: (pubkey) =>
+                                        showUserProfileSheet(
+                                          context,
+                                          pubkey,
+                                          names: channelIdentityNamesProvider(
+                                            channelId,
+                                          ),
+                                        ),
+                                  ),
+                                for (final pay
+                                    in message.sonarPay?.receipts ??
+                                        const <SonarPayView>[])
+                                  Padding(
+                                    padding: const EdgeInsets.only(
+                                      top: Grid.half,
+                                    ),
+                                    child: SonarPayBubble(
+                                      key: ValueKey('sonar-pay-${pay.id}'),
+                                      pay: pay,
+                                      mine:
+                                          message.pubkey.toLowerCase() ==
+                                          currentPubkey?.toLowerCase(),
+                                    ),
+                                  ),
                               ],
                             ),
                           ),

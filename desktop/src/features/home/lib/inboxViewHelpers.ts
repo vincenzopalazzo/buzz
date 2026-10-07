@@ -215,6 +215,7 @@ export function toInboxContextMessage(
     mentionPubkeysByName,
     reactions: message.reactions,
     signerPubkey: message.signerPubkey,
+    sonarPay: message.sonarPay,
     tags: message.tags,
     timeLabel: message.time,
   };
@@ -246,6 +247,7 @@ export function toTimelineMessage(
     reactions: message.reactions ?? [],
     rootId: message.rootId ?? threadReference.rootId,
     signerPubkey: message.signerPubkey,
+    sonarPay: message.sonarPay,
     tags: message.tags,
     time: message.timeLabel ?? message.fullTimestampLabel,
   };

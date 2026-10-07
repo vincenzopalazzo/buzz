@@ -5,6 +5,7 @@ import {
   depthGuideActionsEqual,
   numberArrayEqual,
   reactionsEqual,
+  sonarPayEqual,
   tagsEqual,
 } from "./messageRowEquality.ts";
 
@@ -109,6 +110,21 @@ test("depthGuideActionsEqual: same values (message by id) → equal", () => {
       [{ active: false, depth: 1, label: "Collapse replies", message }],
       [{ active: true, depth: 1, label: "Collapse replies", message }],
     ),
+    false,
+  );
+});
+
+test("sonarPayEqual: fresh identity equal; a late settlement is not", () => {
+  const view = (settled) => ({
+    text: "paid",
+    receipts: [{ id: "p1", sats: 21, settled, preimage: undefined }],
+  });
+  assert.equal(sonarPayEqual(undefined, undefined), true);
+  assert.equal(sonarPayEqual(view(false), view(false)), true);
+  assert.equal(sonarPayEqual(view(false), view(true)), false);
+  assert.equal(sonarPayEqual(view(false), undefined), false);
+  assert.equal(
+    sonarPayEqual(view(false), { ...view(false), text: "x" }),
     false,
   );
 });

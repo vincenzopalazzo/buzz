@@ -292,6 +292,7 @@ fn classify_batch(
         let mut max_trigger = 0;
         for event in item.events {
             if event.pubkey.eq_ignore_ascii_case(&self_pubkey)
+                || crate::sonar_pay::is_control_message(event.kind, &event.content)
                 || item
                     .channel
                     .read_at
@@ -584,6 +585,43 @@ mod tests {
             ["broadcast"]
         );
         assert_eq!(*max_trigger, 12);
+    }
+
+    #[test]
+    fn sonar_settlement_rows_never_count_as_unread() {
+        let req = request();
+        let channel = CatchUpChannel {
+            id: "dm".into(),
+            channel_type: "dm".into(),
+            name: "Agent".into(),
+            read_at: Some(9),
+        };
+        let mut receipt = event("receipt", "agent", 10, &[&["h", "dm"]]);
+        receipt.content = "Paid.\n⚡PAY|1|abc|21".into();
+        let mut settlement = event("settlement", "agent", 11, &[&["h", "dm"]]);
+        settlement.content = "⚡PAYDONE|2|abc".into();
+        let fetched = vec![FetchedChannel {
+            order: 0,
+            channel,
+            events: vec![receipt, settlement],
+        }];
+        let result = classify_batch(&req, fetched, &HashMap::new());
+        let ChannelResult::Success {
+            observed_events,
+            max_trigger,
+            ..
+        } = &result[0]
+        else {
+            panic!("expected success")
+        };
+        assert_eq!(
+            observed_events
+                .iter()
+                .map(|event| event.id.as_str())
+                .collect::<Vec<_>>(),
+            ["receipt"]
+        );
+        assert_eq!(*max_trigger, 10);
     }
 
     /// Pins the SERIALIZED wire contract against `tauriUnreadCatchUp.ts`.

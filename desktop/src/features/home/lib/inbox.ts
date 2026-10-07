@@ -1,3 +1,5 @@
+import type { SonarPayMessageView } from "@/features/messages/lib/sonarPay";
+import { sonarPayPreviewText } from "@/features/messages/lib/sonarPay";
 import {
   resolveUserLabel,
   type UserProfileLookup,
@@ -89,6 +91,8 @@ export type InboxReply = {
    * the signing agent may enable the card.
    */
   signerPubkey?: string;
+  /** Sonar `⚡PAY` receipts carried by this message (see `sonarPay.ts`). */
+  sonarPay?: SonarPayMessageView;
   tags?: string[][];
   /** Clock time only, for the hover gutter on continuation rows. */
   timeLabel?: string;
@@ -178,7 +182,8 @@ function feedHeadline(item: FeedItem, groupItems: readonly FeedItem[] = []) {
 }
 
 function feedPreview(item: FeedItem) {
-  const content = item.content.trim();
+  // Sonar receipt lines read as "⚡ Paid 21 sats", never as raw wire text.
+  const content = (sonarPayPreviewText(item.content) ?? "").trim();
   if (content.length > 0) {
     return content;
   }

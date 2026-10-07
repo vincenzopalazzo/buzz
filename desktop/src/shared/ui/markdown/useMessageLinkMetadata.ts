@@ -1,3 +1,4 @@
+import { sonarPayPreviewText } from "@/features/messages/lib/sonarPay";
 import * as React from "react";
 
 import type { ParsedMessageLink } from "@/features/messages/lib/messageLink";
@@ -72,7 +73,9 @@ function fetchMetadata(
             profile?.nip05Handle?.trim() ||
             truncateNpub(event.pubkey),
           createdAt: event.created_at,
-          snippet: summarizeMessageLinkContent(event.content),
+          snippet: summarizeMessageLinkContent(
+            sonarPayPreviewText(event.content) ?? "",
+          ),
         };
       })
       .catch((error) =>

@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import '../../shared/sonar_pay/sonar_pay.dart';
+
 @immutable
 class FeedItem {
   final String id;
@@ -80,9 +82,10 @@ class FeedItem {
     }
   }
 
-  /// Trimmed content, with a fallback for empty events.
+  /// Trimmed content, with a fallback for empty events. Payment receipt
+  /// lines are summarized, e.g. "⚡ Paid 2,100 sats".
   String get displayContent {
-    final trimmed = content.trim();
+    final trimmed = (sonarPayPreviewText(content) ?? '').trim();
     if (trimmed.isNotEmpty) return trimmed;
     if (kind == 46010) return 'A workflow is waiting for approval.';
     return 'No additional details.';

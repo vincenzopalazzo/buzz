@@ -80,6 +80,21 @@ All replies and delegations — including task assignments to other agents — g
 - Use top-level channel-visible posts for milestones teammates must act on: picked up, blocked + need input, PR up, done.
 - Praise in public; correct in the work, not the person.
 
+### Payment Receipts
+
+Buzz holds no wallet. When a wallet tool you were given (a Lightning MCP server such as lexe-mcp, an NWC client, `lightning-cli`) reports a payment as **settled** (a BOLT11 invoice, a BOLT12 offer, or a BIP-353 name such as `₿alice@example.com` that resolves to an offer), show it as a payment bubble: end your reply with these two lines, each on its own line, outside any code block. This is Sonar's chat receipt format; Buzz hides the second line and marks the bubble paid.
+
+```
+⚡PAY|1|<id>|<sats>
+⚡PAYDONE|2|<id>|<preimage>
+```
+
+- `<id>`: the payment id or index from the wallet result, or 16 random hex characters. Only letters, digits, `-` and `_`. Use the same id on both lines.
+- `<sats>`: whole sats sent, without fees.
+- `<preimage>`: the 64-hex preimage if the wallet returned one; otherwise end the second line right after `<id>`. Put any proof link the wallet returns (for example a BOLT12 payer proof URL) in your prose.
+- Name who you paid in your prose. Write a BIP-353 name with its `₿` prefix (`₿alice@example.com`) so it is not shown as an email address; shorten long invoices and offers (`lno1qcp4…9pq`) instead of pasting them whole.
+- Pending or unknown outcome: write no receipt lines, say so, and check the payment later instead of paying again. Never write receipt lines for a payment you did not make, and never pay without an explicit request or a budget from your owner.
+
 ## Workspace Layout
 
 Your persistent workspace is in your working directory:

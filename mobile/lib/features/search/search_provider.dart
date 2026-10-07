@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../shared/relay/relay.dart';
+import '../../shared/sonar_pay/sonar_pay.dart';
 import '../channels/channel.dart';
 import '../channels/channel_management_provider.dart';
 import '../channels/channels_provider.dart';
@@ -149,11 +150,14 @@ class SearchNotifier extends Notifier<SearchState> {
           c.id: c.name,
       };
 
+      // Payment receipt lines read as "⚡ Paid 21 sats"; settlement-only
+      // rows are hidden in the timeline, so they are dropped here too.
       final hits = events
+          .where((e) => !isSonarPayControlEvent(e.kind, e.content))
           .map(
             (e) => SearchHit(
               eventId: e.id,
-              content: e.content,
+              content: sonarPayPreviewText(e.content) ?? '',
               kind: e.kind,
               pubkey: e.pubkey,
               channelId: e.channelId,

@@ -1,3 +1,7 @@
+import {
+  isSonarPayControlLine,
+  sonarPayPreviewText,
+} from "@/features/messages/lib/sonarPay";
 import { invoke as tauriInvoke } from "@tauri-apps/api/core";
 import { beginChannelMembershipWrite } from "@/shared/api/channelMembershipWrites";
 import {
@@ -9,6 +13,7 @@ import type {
   AddChannelMembersResult,
   BackendProviderCandidate,
   BackendProviderProbeResult,
+  FeedItem,
   GetHomeFeedInput,
   HomeFeedResponse,
   ManagedAgent,
@@ -389,17 +394,31 @@ export async function leaveChannel(channelId: string): Promise<void> {
   record(channelId);
 }
 
+/**
+ * Sonar `⚡PAYDONE`-only messages only settle a payment bubble. They are not
+ * inbox items and must not notify, so the feed drops them at its one entry
+ * point (inbox list, activity popover and feed notifications all read here).
+ */
+function isVisibleFeedItem(item: FeedItem) {
+  return !(
+    (item.kind === 9 || item.kind === 40002) &&
+    isSonarPayControlLine(item.content)
+  );
+}
+
 export async function getHomeFeed(
   input: GetHomeFeedInput = {},
 ): Promise<HomeFeedResponse> {
   const response = await invokeTauri<RawHomeFeedResponse>("get_feed", input);
+  const items = (raw: RawFeedItem[]) =>
+    raw.map(fromRawFeedItem).filter(isVisibleFeedItem);
 
   return {
     feed: {
-      mentions: response.feed.mentions.map(fromRawFeedItem),
-      needsAction: response.feed.needs_action.map(fromRawFeedItem),
-      activity: response.feed.activity.map(fromRawFeedItem),
-      agentActivity: response.feed.agent_activity.map(fromRawFeedItem),
+      mentions: items(response.feed.mentions),
+      needsAction: items(response.feed.needs_action),
+      activity: items(response.feed.activity),
+      agentActivity: items(response.feed.agent_activity),
     },
     meta: {
       since: response.meta.since,
@@ -421,10 +440,13 @@ export async function searchMessages(
     until: input.until,
   });
 
-  return {
-    hits: response.hits.map(fromRawSearchHit),
-    found: response.found,
-  };
+  // Search shows message text, not Sonar wire lines: `⚡PAYDONE`-only hits are
+  // dropped and receipt lines read as "⚡ Paid 21 sats".
+  const hits = response.hits.map(fromRawSearchHit).flatMap((hit) => {
+    const content = sonarPayPreviewText(hit.content);
+    return content === null ? [] : [{ ...hit, content }];
+  });
+  return { hits, found: response.found };
 }
 
 type RawThreadCursor = {

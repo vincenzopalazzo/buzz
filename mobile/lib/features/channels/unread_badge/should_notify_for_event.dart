@@ -1,4 +1,5 @@
 import '../../../shared/relay/nostr_models.dart';
+import '../../../shared/sonar_pay/sonar_pay.dart';
 
 bool shouldNotifyForEvent(
   NostrEvent event,
@@ -11,6 +12,7 @@ bool shouldNotifyForEvent(
   String? channelId,
 }) {
   if (!EventKind.channelMessageEventKinds.contains(event.kind)) return false;
+  if (isSonarPayControlEvent(event.kind, event.content)) return false;
 
   if (event.pubkey.toLowerCase() == myPubkey.toLowerCase()) return false;
 

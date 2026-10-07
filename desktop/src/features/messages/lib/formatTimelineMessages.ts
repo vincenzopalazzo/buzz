@@ -46,8 +46,31 @@ import { formatTime } from "@/features/messages/lib/dateFormatters";
 // can exercise the exact same source the renderer uses.
 import { applyEditTagOverlay } from "@/features/messages/lib/applyEditTagOverlay.mjs";
 import { truncateNpub } from "@/shared/lib/pubkey";
+import {
+  collectSonarPaySettlements,
+  isSonarPayControlLine,
+  resolveSonarPayMessage,
+} from "@/features/messages/lib/sonarPay";
 
 const HEX_RE = /^[0-9a-f]+$/i;
+
+/** Plain chat kinds that can carry a Sonar `⚡PAY` / `⚡PAYDONE` line. */
+function isSonarPayCarrierKind(kind: number) {
+  return kind === KIND_STREAM_MESSAGE || kind === KIND_STREAM_MESSAGE_V2;
+}
+
+/**
+ * A Sonar `⚡PAYDONE` control message: never its own row, never unread. It
+ * only flips the matching `⚡PAY` bubble to settled (see `sonarPay.ts`).
+ */
+export function isSonarPayControlEvent(event: {
+  kind: number;
+  content: string;
+}) {
+  return (
+    isSonarPayCarrierKind(event.kind) && isSonarPayControlLine(event.content)
+  );
+}
 
 export function isTimelineContentEvent(event: RelayEvent) {
   return (
@@ -107,7 +130,11 @@ export function countTopLevelTimelineRows(events: RelayEvent[]): number {
 
   let count = 0;
   for (const event of events) {
-    if (!isTimelineContentEvent(event) || deletedEventIds.has(event.id)) {
+    if (
+      !isTimelineContentEvent(event) ||
+      deletedEventIds.has(event.id) ||
+      isSonarPayControlEvent(event)
+    ) {
       continue;
     }
     const { parentId } = getThreadReference(event.tags);
@@ -297,8 +324,30 @@ export function formatTimelineMessages(
     }
   }
 
+  // Sonar payment receipts: fold every `⚡PAYDONE` (by signer) first, then
+  // hide those control rows. Uses the effective (edited) body so the row and
+  // its bubble always agree.
+  const effectiveContent = (event: RelayEvent) =>
+    editsByTargetId.get(event.id)?.content ?? event.content;
+  const sonarPaySettlements = collectSonarPaySettlements(
+    events
+      .filter(
+        (event) =>
+          isSonarPayCarrierKind(event.kind) && !deletedEventIds.has(event.id),
+      )
+      .map((event) => ({
+        pubkey: event.pubkey,
+        content: effectiveContent(event),
+      })),
+  );
   const visibleEvents = events.filter(
-    (event) => isTimelineContentEvent(event) && !deletedEventIds.has(event.id),
+    (event) =>
+      isTimelineContentEvent(event) &&
+      !deletedEventIds.has(event.id) &&
+      !isSonarPayControlEvent({
+        kind: event.kind,
+        content: effectiveContent(event),
+      }),
   );
   const eventsById = new Map(visibleEvents.map((event) => [event.id, event]));
   const reactionPresence = new Map<
@@ -540,6 +589,15 @@ export function formatTimelineMessages(
           )
           .map(({ earliestCreatedAt: _drop, ...pill }) => pill);
       })(),
+      // Bound to the raw signer, not a relay-delegated display author: only
+      // the key that signed the `⚡PAY` can settle it with a `⚡PAYDONE`.
+      sonarPay: isSonarPayCarrierKind(event.kind)
+        ? resolveSonarPayMessage(
+            edit ? edit.content : event.content,
+            event.pubkey,
+            sonarPaySettlements,
+          )
+        : undefined,
     };
   });
 }

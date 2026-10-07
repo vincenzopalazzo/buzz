@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../shared/relay/relay.dart';
+import '../../shared/sonar_pay/sonar_pay.dart';
 import '../channels/channel.dart';
 import '../channels/channel_management_provider.dart';
 import '../channels/channels_provider.dart';
@@ -517,6 +518,8 @@ class ActivityNotifier extends AsyncNotifier<HomeFeedResponse> {
     final byId = <String, FeedItem>{};
     void add(Iterable<NostrEvent> events, String category) {
       for (final event in events) {
+        // Settlement-only rows are hidden in the timeline; never surface them.
+        if (isSonarPayControlEvent(event.kind, event.content)) continue;
         final existing = byId[event.id];
         if (existing != null &&
             categoryPriority(existing.category) <= categoryPriority(category)) {

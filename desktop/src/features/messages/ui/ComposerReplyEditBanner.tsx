@@ -1,4 +1,5 @@
 import { CornerUpLeft, Pencil, X } from "lucide-react";
+import { sonarPayPreviewText } from "@/features/messages/lib/sonarPay";
 
 import { cn } from "@/shared/lib/cn";
 import { Button } from "@/shared/ui/button";
@@ -55,6 +56,8 @@ export function ComposerReplyEditBanner({
   }
 
   if (replyTarget) {
+    // Sonar receipt lines read as "⚡ Paid 21 sats", never as raw wire text.
+    const replyBody = sonarPayPreviewText(replyTarget.body);
     return (
       <div
         className={cn(BANNER_CLASS, "items-start")}
@@ -65,10 +68,8 @@ export function ComposerReplyEditBanner({
           <p className="truncate font-medium text-foreground">
             Replying to {replyTarget.author}
           </p>
-          {replyTarget.body ? (
-            <p className="truncate text-muted-foreground/80">
-              {replyTarget.body}
-            </p>
+          {replyBody ? (
+            <p className="truncate text-muted-foreground/80">{replyBody}</p>
           ) : null}
         </div>
         {onCancelReply ? (

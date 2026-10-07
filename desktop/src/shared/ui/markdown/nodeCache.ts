@@ -2,6 +2,7 @@ import type * as React from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
+import remarkBip353 from "@/shared/lib/remarkBip353";
 
 import remarkChannelDeepLinks from "@/features/messages/lib/remarkChannelDeepLinks";
 import remarkMessageLinks from "@/features/messages/lib/remarkMessageLinks";
@@ -106,6 +107,8 @@ function buildMarkdownElement(input: MarkdownParseInputs): React.ReactElement {
     components: input.components,
     remarkPlugins: [
       remarkGfm,
+      // Must follow remark-gfm: undoes its mailto autolink on `₿user@domain`.
+      remarkBip353,
       ...(input.hardLineBreaks === false ? [] : [remarkBreaks]),
       remarkSpoilers,
       remarkChannelDeepLinks,

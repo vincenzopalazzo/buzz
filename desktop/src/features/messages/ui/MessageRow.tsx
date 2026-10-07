@@ -4,6 +4,7 @@ import {
   depthGuideActionsEqual,
   numberArrayEqual,
   reactionsEqual,
+  sonarPayEqual,
   tagsEqual,
 } from "@/features/messages/lib/messageRowEquality";
 import {
@@ -57,6 +58,8 @@ import {
 } from "./MessageHeader";
 import { MessageTimestamp } from "./MessageTimestamp";
 import { SentFromThreadLine } from "./SentFromThreadLine";
+import { SonarPayBubble } from "./SonarPayBubble";
+import { sonarPayPreviewText } from "@/features/messages/lib/sonarPay";
 import { WaveMessageAttachment } from "./WaveMessageAttachment";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/shared/ui/tooltip";
 import { useMessageAgentAddressPrefix } from "./MessageAgentAddressPrefix";
@@ -233,7 +236,7 @@ export const MessageRow = React.memo(
         openReminder({
           eventId: msg.id,
           channelId: channelId ?? "",
-          preview: msg.body.slice(0, 100),
+          preview: (sonarPayPreviewText(msg.body) ?? "").slice(0, 100),
           authorPubkey: msg.pubkey ?? "",
         });
       },
@@ -415,7 +418,10 @@ export const MessageRow = React.memo(
             />
           );
         default: {
-          const waveMessage = parseWaveMessageContent(message.body);
+          const sonarPay = message.sonarPay;
+          const waveMessage = sonarPay
+            ? null
+            : parseWaveMessageContent(message.body);
           if (waveMessage) {
             return (
               <WaveMessageAttachment
@@ -428,7 +434,10 @@ export const MessageRow = React.memo(
             );
           }
 
-          return (
+          // Sonar receipts: render the message text without its payment lines,
+          // then one bubble per `⚡PAY` line.
+          const markdownContent = sonarPay ? sonarPay.text : message.body;
+          const markdown = markdownContent ? (
             <VideoReviewCommentMarkdown
               channelNames={channelNames}
               className={cn(
@@ -444,7 +453,7 @@ export const MessageRow = React.memo(
                 message,
                 isKnownAgentPubkey,
               )}
-              content={message.body}
+              content={markdownContent}
               messageId={message.id}
               linkPreviewsSuppressed={linkPreviewsSuppressed}
               linkPreviewTags={message.tags}
@@ -460,6 +469,23 @@ export const MessageRow = React.memo(
               videoReviewCommentRootId={videoReviewCommentRootId}
               videoReviewContext={videoReviewContext}
             />
+          ) : null;
+          if (!sonarPay) return markdown;
+          const mine =
+            !!currentPubkey &&
+            message.signerPubkey === currentPubkey.toLowerCase();
+          return (
+            <>
+              {markdown}
+              {sonarPay.receipts.map((pay) => (
+                <SonarPayBubble
+                  className="mt-1"
+                  key={pay.id}
+                  mine={mine}
+                  pay={pay}
+                />
+              ))}
+            </>
           );
         }
       }
@@ -961,6 +987,8 @@ export const MessageRow = React.memo(
     // checks made every row re-render on every streamed event in an open
     // thread (see messageRowEquality.ts).
     reactionsEqual(prev.message.reactions, next.message.reactions) &&
+    // A `⚡PAYDONE` arriving later settles a bubble without changing body.
+    sonarPayEqual(prev.message.sonarPay, next.message.sonarPay) &&
     tagsEqual(prev.message.tags, next.message.tags) &&
     prev.message.role === next.message.role &&
     prev.message.personaDisplayName === next.message.personaDisplayName &&

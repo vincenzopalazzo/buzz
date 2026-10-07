@@ -433,6 +433,7 @@ public final class BuzzPushNotificationResolver: BuzzPushNotificationResolving {
     guard let mine = community.pubkey?.lowercased() else { return nil }
     return events.filter {
       $0.pubkey.lowercased() != mine && [9, 40002, 45001, 45003].contains($0.kind)
+        && !SonarPayPreview.isControlMessage(kind: $0.kind, content: $0.content)
     }.sorted {
       $0.createdAt == $1.createdAt ? $0.id < $1.id : $0.createdAt > $1.createdAt
     }.first
@@ -444,7 +445,7 @@ public final class BuzzPushNotificationResolver: BuzzPushNotificationResolving {
     profile: BuzzPushCachedProfile?,
     channel: BuzzPushCachedChannel?
   ) -> BuzzPushResolution? {
-    let body = previewBody(event.content)
+    let body = previewBody(SonarPayPreview.previewText(event.content) ?? "")
     guard !body.isEmpty else { return nil }
     let channelID = tagValue("h", in: event)
     let conversationIdentifier = channelID.map {

@@ -1,3 +1,4 @@
+import type { SonarPayMessageView } from "@/features/messages/lib/sonarPay";
 export type TimelineReaction = {
   emoji: string;
   /** Custom (image) emoji URL from the reaction's NIP-30 `emoji` tag, if any. */
@@ -49,4 +50,9 @@ export type TimelineMessage = {
   kind?: number;
   tags?: string[][];
   reactions?: TimelineReaction[];
+  /**
+   * Sonar `⚡PAY` receipts carried by this message: the text without the
+   * payment lines, plus one bubble per `⚡PAY` line.
+   */
+  sonarPay?: SonarPayMessageView;
 };
